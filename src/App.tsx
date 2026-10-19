@@ -6,6 +6,7 @@ import Splash from "./components/Splash";
 import BusinessDayScreen from "./screens/BusinessDayScreen";
 import StationsScreen from "./screens/StationsScreen";
 import SettingsScreen from "./screens/SettingsScreen";
+import { EGO_LOGO_ALT, EGO_LOGO_SRC } from "./brand";
 import { useCafeData, useCafeActions } from "./hooks/useCafe";
 import { ACTIVE_TAB_KEY, MIN_SPLASH_MS, parseActiveTab } from "./constants";
 import { exitDemoMode } from "./dev/demoMode";
@@ -150,8 +151,18 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          {t("app.name")}
-          <small>{t("app.tagline")}</small>
+          <img
+            src={EGO_LOGO_SRC}
+            alt={EGO_LOGO_ALT}
+            className="brand-logo"
+            width={44}
+            height={50}
+            decoding="async"
+          />
+          <span className="brand-text">
+            {t("app.name")}
+            <small>{t("app.tagline")}</small>
+          </span>
         </div>
         {demoActive && (
           <div className="pill dev" role="status">
