@@ -142,6 +142,14 @@ describe("stations workflow", () => {
     await waitFor(() =>
       expect(screen.getAllByText("فاضي").length).toBeGreaterThan(0),
     );
+    // Regression: the stop notice must interpolate the station name and the
+    // saved duration — never render literal {{name}} / {{duration}} tokens.
+    const notice = document.querySelector(".notice.ok");
+    expect(notice).not.toBeNull();
+    expect(notice?.textContent).toMatch(
+      /^تم إيقاف .+\. المدة المحفوظة \d{2}:\d{2}:\d{2}\.$/,
+    );
+    expect(notice?.textContent).not.toContain("{{");
   });
 
   it("closing a day while a station runs is blocked with Arabic message", async () => {

@@ -5,6 +5,7 @@ import { canStartSessionDetailed } from "../domain/rentalSession";
 import * as dayRepo from "../repositories/businessDayRepo";
 import * as stationRepo from "../repositories/stationRepo";
 import * as sessionRepo from "../repositories/sessionRepo";
+import { formatHMS } from "../utils/time";
 import type { BusinessDay, RentalSession, Station } from "../domain/types";
 
 export interface CafeResult {
@@ -232,14 +233,19 @@ export function useCafeActions(refresh: () => Promise<void>): {
   const stopStation = async (stationId: number): Promise<CafeResult> => {
     const active = await sessionRepo.getActiveSession(stationId);
     if (!active) return { ok: false, messageKey: "stations.noSession" };
+    const station = await stationRepo.getStation(stationId);
     try {
       const done = await sessionRepo.stopSession(active.id, Date.now());
       await refresh();
-      const mins = Math.max(1, Math.round((done.durationMs ?? 0) / 60000));
+      // stations.stopped interpolates {{name}} and {{duration}}; both must be
+      // supplied or i18next renders the tokens literally in the UI.
       return {
         ok: true,
         messageKey: "stations.stopped",
-        params: { id: stationId, mins },
+        params: {
+          name: station?.name ?? `#${stationId}`,
+          duration: formatHMS(done.durationMs ?? 0),
+        },
       };
     } catch {
       await refresh();
