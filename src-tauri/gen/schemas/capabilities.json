@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Minimal capabilities: local SQLite only, no network.","local":true,"windows":["main"],"permissions":["sql:allow-load","sql:allow-execute","sql:allow-select","sql:allow-close"]}}

@@ -1,0 +1,41 @@
+{
+  "name": "ps-cafe",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Offline PlayStation cyber cafe management - Tauri 2 + React desktop app",
+  "scripts": {
+    "dev": "VITE_ENABLE_DEVTOOLS=1 vite",
+    "build": "tsc --noEmit && vite build",
+    "build:internal": "VITE_ENABLE_DEVTOOLS=1 tsc --noEmit && VITE_ENABLE_DEVTOOLS=1 vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "prettier --check \"src/**/*.{ts,tsx,css}\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"docs/**/*.md\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-sql": "^2.6.0",
+    "i18next": "^26.5.2",
+    "lucide-react": "^1.59.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-i18next": "^17.1.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.3",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "jsdom": "^26.1.0",
+    "prettier": "^3.6.2",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.12",
+    "vitest": "^3.2.4"
+  }
+}

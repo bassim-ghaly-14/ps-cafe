@@ -1,0 +1,7 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "default",
+  "description": "Minimal capabilities: local SQLite only, no network.",
+  "windows": ["main"],
+  "permissions": ["sql:allow-load", "sql:allow-execute", "sql:allow-select", "sql:allow-close"]
+}

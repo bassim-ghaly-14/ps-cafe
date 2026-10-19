@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PS Club — نموذج مبدئي</title>
+<style>
+:root{
+  --bg:#070b14; --panel:#0d1424; --panel2:#111b30; --line:#1e2c4a;
+  --text:#e4edff; --mute:#7f90b3; --ok:#19e3a1; --bad:#ff4d6d; --accent:#2ee6ff;
+  --font:"Segoe UI",Tahoma,"Noto Sans Arabic",Arial,sans-serif;
+  --mono:Consolas,"Courier New",monospace;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:48px 48px;background-position:center top}
+body::before{content:"";position:fixed;inset:0;background:radial-gradient(ellipse at 50% 0,transparent 20%,var(--bg) 75%);pointer-events:none}
+.app{position:relative;max-width:1040px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:6px 0 18px}
+.brand{font-size:22px;font-weight:700;letter-spacing:.5px}
+.brand small{display:block;font-size:12px;color:var(--mute);font-weight:400;margin-top:2px}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border:1px solid var(--line);border-radius:999px;background:var(--panel);font-size:13px;color:var(--mute)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--bad)}
+.pill.on{color:var(--ok);border-color:#14604a}.pill.on .dot{background:var(--ok);box-shadow:0 0 10px var(--ok)}
+nav{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:22px}
+nav button{background:none;border:0;color:var(--mute);font:inherit;font-size:15px;padding:12px 18px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+nav button:hover{color:var(--text)}
+nav button.act{color:var(--accent);border-color:var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tab{display:none}.tab.act{display:block}
+.grid{display:grid;gap:14px}
+.stats{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:20px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px}
+.stat span{font-size:13px;color:var(--mute)}
+.stat b{display:block;font-family:var(--mono);font-size:30px;margin-top:6px;font-weight:600}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:20px;margin-bottom:20px}
+.box h3{font-size:16px;margin-bottom:14px}
+.day-ctl{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.clock{font-family:var(--mono);font-size:44px;letter-spacing:1px}
+.sub{font-size:13px;color:var(--mute);margin-top:4px}
+.btn{font:inherit;font-size:15px;font-weight:600;border:1px solid transparent;border-radius:5px;padding:11px 24px;cursor:pointer;color:#04101a;background:var(--ok)}
+.btn.stop{background:var(--bad);color:#fff}
+.btn.ghost{background:transparent;color:var(--text);border-color:var(--line)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn:active{transform:translateY(1px)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:10px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th{color:var(--mute);font-weight:400;font-size:13px}
+td.n{font-family:var(--mono)}
+.cards{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--c);border-radius:6px;padding:18px;transition:box-shadow .3s,border-color .3s}
+.card.run{box-shadow:0 0 0 1px var(--c),0 0 24px -6px var(--c)}
+.card .top{display:flex;justify-content:space-between;align-items:center}
+.card h4{font-size:17px}
+.tag{font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid var(--line);color:var(--mute)}
+.card.run .tag{color:var(--c);border-color:var(--c)}
+.card .time{font-family:var(--mono);font-size:36px;margin:18px 0 4px;direction:ltr;text-align:right}
+.card .cost{color:var(--mute);font-size:14px;margin-bottom:16px}
+.card .cost b{color:var(--text);font-family:var(--mono)}
+.card .foot{display:flex;justify-content:space-between;font-size:12px;color:var(--mute);margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.card .btn{width:100%}
+.lock{background:var(--panel2);border:1px dashed var(--line);border-radius:6px;padding:14px;margin-bottom:16px;color:var(--mute);font-size:14px}
+.set-row{display:grid;grid-template-columns:34px 1.4fr 1fr 70px 40px;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.set-row .h{color:var(--mute);font-size:12px}
+input[type=text],input[type=number]{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:4px;padding:8px 10px;font:inherit;font-size:14px}
+input[type=color]{width:100%;height:36px;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:2px;cursor:pointer}
+.x{background:none;border:1px solid var(--line);color:var(--bad);border-radius:4px;height:34px;cursor:pointer;font-size:16px}
+.sw{width:14px;height:14px;border-radius:3px;background:var(--c)}
+.row2{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:16px}
+.note{font-size:12px;color:var(--mute);text-align:center;margin-top:30px}
+@media(max-width:620px){.set-row{grid-template-columns:20px 1fr 80px 56px 36px}.clock{font-size:34px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><span id="clubName">PS Club</span><small>نموذج مبدئي للشكل — البيانات تجريبية وبتتصفّر عند تحديث الصفحة</small></div>
+    <div class="pill" id="dayPill"><i class="dot"></i><span id="dayPillTxt">يوم العمل مقفول</span></div>
+  </header>
+
+  <nav id="nav">
+    <button class="act" data-t="t1">يوم العمل</button>
+    <button data-t="t2">الأجهزة</button>
+    <button data-t="t3">الإعدادات</button>
+  </nav>
+
+  <!-- TAB 1 -->
+  <section class="tab act" id="t1">
+    <div class="box">
+      <div class="day-ctl">
+        <div>
+          <div class="clock" id="dayClock" style="direction:ltr">00:00:00</div>
+          <div class="sub" id="daySub">ابدأ يوم العمل عشان تقدر تشغّل الأجهزة</div>
+        </div>
+        <button class="btn" id="dayBtn">بدء يوم العمل</button>
+      </div>
+    </div>
+
+    <div class="grid stats">
+      <div class="stat"><span>أيام العمل المقفولة</span><b id="sDays">0</b></div>
+      <div class="stat"><span>مرات التشغيل (كل الأيام)</span><b id="sSess">0</b></div>
+      <div class="stat"><span>ساعات التأجير</span><b id="sHours">0.0</b></div>
+      <div class="stat"><span>الإيراد</span><b id="sRev">0</b></div>
+    </div>
+
+    <div class="box">
+      <h3>سجل أيام العمل</h3>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>اليوم</th><th>فُتح</th><th>اتقفل</th><th>مدة اليوم</th><th>مرات التشغيل</th><th>ساعات التأجير</th><th>الإيراد</th></tr></thead>
+          <tbody id="hist"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 2 -->
+  <section class="tab" id="t2">
+    <div class="lock" id="lockMsg">يوم العمل مقفول — افتحه من تاب «يوم العمل» الأول.</div>
+    <div class="grid cards" id="cards"></div>
+  </section>
+
+  <!-- TAB 3 -->
+  <section class="tab" id="t3">
+    <div class="box">
+      <h3>عام</h3>
+      <label class="sub" for="nameIn">اسم المحل</label>
+      <input type="text" id="nameIn" value="PS Club" style="max-width:320px;margin-top:6px">
+    </div>
+    <div class="box">
+      <h3>كروت الأجهزة</h3>
+      <div class="set-row"><span></span><span class="h">الاسم</span><span class="h">سعر الساعة</span><span class="h">اللون</span><span></span></div>
+      <div id="setRows"></div>
+      <div class="row2">
+        <button class="btn ghost" id="addDev">+ إضافة جهاز</button>
+        <span class="sub" id="devCount"></span>
+      </div>
+    </div>
+  </section>
+
+  <p class="note">React + Tauri · ملف exe لويندوز 10 · يعمل بدون إنترنت 100%</p>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const COLORS=["#2ee6ff","#b36bff","#ff4d9d","#ffc233","#19e3a1","#ff7a3d"];
+const H=3600000;
+const st={
+  open:false,start:null,cur:{n:0,ms:0,rev:0},
+  days:[
+    {no:2,s:"السبت 4:10 م",e:"الأحد 2:35 ص",ms:10.4*H,n:14,hrs:31.5,rev:945},
+    {no:1,s:"الجمعة 3:00 م",e:"السبت 1:50 ص",ms:10.8*H,n:11,hrs:24,rev:720}
+  ],
+  devs:[
+    {name:"PS5 — جهاز 1",rate:40,color:COLORS[0]},
+    {name:"PS5 — جهاز 2",rate:40,color:COLORS[1]},
+    {name:"PS4 — جهاز 3",rate:30,color:COLORS[2]},
+    {name:"PS4 — جهاز 4",rate:30,color:COLORS[3]}
+  ].map(d=>({...d,run:false,t0:0,n:0,ms:0}))
+};
+const p2=n=>String(n).padStart(2,"0");
+const fmt=ms=>{const s=Math.floor(ms/1000);return p2(Math.floor(s/3600))+":"+p2(Math.floor(s%3600/60))+":"+p2(s%60)};
+const cost=(ms,r)=>Math.round(ms/H*r);
+const now=()=>Date.now();
+
+/* tabs */
+$("#nav").onclick=e=>{
+  const t=e.target.dataset.t; if(!t)return;
+  document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("act",b===e.target));
+  document.querySelectorAll(".tab").forEach(s=>s.classList.toggle("act",s.id===t));
+};
+
+/* work day */
+$("#dayBtn").onclick=()=>{
+  if(!st.open){
+    st.open=true;st.start=now();st.cur={n:0,ms:0,rev:0};
+  }else{
+    const running=st.devs.filter(d=>d.run);
+    if(running.length && !confirm("فيه "+running.length+" جهاز لسه شغال، هيتقفلوا مع اليوم. تكمل؟"))return;
+    running.forEach(stopDev);
+    const dur=now()-st.start;
+    st.days.unshift({no:st.days.length+1,s:"النهاردة",e:"دلوقتي",ms:dur,n:st.cur.n,hrs:+(st.cur.ms/H).toFixed(1),rev:st.cur.rev});
+    st.open=false;st.start=null;
+  }
+  drawAll();
+};
+
+/* devices */
+function stopDev(d){
+  const ms=now()-d.t0;
+  d.run=false;d.n++;d.ms+=ms;
+  st.cur.n++;st.cur.ms+=ms;st.cur.rev+=cost(ms,d.rate);
+}
+function drawCards(){
+  $("#lockMsg").style.display=st.open?"none":"block";
+  $("#cards").innerHTML=st.devs.map((d,i)=>{
+    const live=d.run?now()-d.t0:0;
+    return `<div class="card ${d.run?"run":""}" style="--c:${d.color}">
+      <div class="top"><h4>${d.name}</h4><span class="tag">${d.run?"شغال":"فاضي"}</span></div>
+      <div class="time">${fmt(live)}</div>
+      <div class="cost">التكلفة: <b>${cost(live,d.rate)}</b> ج · ${d.rate} ج/ساعة</div>
+      <button class="btn ${d.run?"stop":""}" data-i="${i}" ${(!st.open&&!d.run)?"disabled":""}>${d.run?"إغلاق":"بدء"}</button>
+      <div class="foot"><span>مرات اليوم: ${d.n}</span><span>ساعات اليوم: ${(d.ms/H).toFixed(1)}</span></div>
+    </div>`}).join("");
+}
+$("#cards").onclick=e=>{
+  const b=e.target.closest("button[data-i]"); if(!b)return;
+  const d=st.devs[b.dataset.i];
+  if(d.run)stopDev(d);else{d.run=true;d.t0=now()}
+  drawAll();
+};
+
+/* day tab */
+function drawDay(){
+  const o=st.open;
+  $("#dayBtn").textContent=o?"إغلاق يوم العمل":"بدء يوم العمل";
+  $("#dayBtn").className="btn"+(o?" stop":"");
+  $("#dayPill").className="pill"+(o?" on":"");
+  $("#dayPillTxt").textContent=o?"يوم العمل مفتوح":"يوم العمل مقفول";
+  $("#daySub").textContent=o?"اليوم شغال — بيتقفل لما تدوس إغلاق، مش بالتاريخ":"ابدأ يوم العمل عشان تقدر تشغّل الأجهزة";
+  $("#dayClock").textContent=fmt(o?now()-st.start:0);
+  const sum=(k)=>st.days.reduce((a,d)=>a+d[k],0);
+  $("#sDays").textContent=st.days.length;
+  $("#sSess").textContent=sum("n")+st.cur.n;
+  $("#sHours").textContent=(sum("hrs")+st.cur.ms/H).toFixed(1);
+  $("#sRev").textContent=(sum("rev")+st.cur.rev)+" ج";
+  const rows=[];
+  if(o)rows.push(`<tr><td>#${st.days.length+1}</td><td>الآن</td><td>—</td><td class="n">${fmt(now()-st.start)}</td><td class="n">${st.cur.n}</td><td class="n">${(st.cur.ms/H).toFixed(1)}</td><td class="n">${st.cur.rev} ج</td></tr>`);
+  st.days.forEach(d=>rows.push(`<tr><td>#${d.no}</td><td>${d.s}</td><td>${d.e}</td><td class="n">${fmt(d.ms)}</td><td class="n">${d.n}</td><td class="n">${d.hrs}</td><td class="n">${d.rev} ج</td></tr>`));
+  $("#hist").innerHTML=rows.join("");
+}
+
+/* settings */
+function drawSet(){
+  $("#setRows").innerHTML=st.devs.map((d,i)=>`<div class="set-row" style="--c:${d.color}">
+    <span class="sw"></span>
+    <input type="text" value="${d.name}" data-k="name" data-i="${i}" aria-label="اسم الجهاز">
+    <input type="number" min="0" value="${d.rate}" data-k="rate" data-i="${i}" aria-label="سعر الساعة">
+    <input type="color" value="${d.color}" data-k="color" data-i="${i}" aria-label="اللون">
+    <button class="x" data-del="${i}" title="حذف" aria-label="حذف الجهاز">×</button></div>`).join("");
+  $("#devCount").textContent="عدد الأجهزة: "+st.devs.length;
+}
+$("#setRows").oninput=e=>{
+  const k=e.target.dataset.k; if(!k)return;
+  const d=st.devs[e.target.dataset.i];
+  d[k]=k==="rate"?(+e.target.value||0):e.target.value;
+  if(k==="color")e.target.closest(".set-row").style.setProperty("--c",d.color);
+  drawCards();
+};
+$("#setRows").onclick=e=>{
+  const i=e.target.dataset.del; if(i===undefined)return;
+  if(st.devs[i].run){alert("اقفل الجهاز الأول قبل ما تحذفه.");return}
+  st.devs.splice(i,1);drawAll(true);
+};
+$("#addDev").onclick=()=>{
+  const n=st.devs.length+1;
+  st.devs.push({name:"جهاز "+n,rate:30,color:COLORS[(n-1)%COLORS.length],run:false,t0:0,n:0,ms:0});
+  drawAll(true);
+};
+$("#nameIn").oninput=e=>{$("#clubName").textContent=e.target.value||"PS Club"};
+
+function drawAll(withSet){drawDay();drawCards();if(withSet||!$("#setRows").children.length)drawSet()}
+drawAll(true);
+setInterval(()=>{ if(st.open||st.devs.some(d=>d.run)){drawDay();drawCards()} },1000);
+</script>
+</body>
+</html>
