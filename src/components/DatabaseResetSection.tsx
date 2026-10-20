@@ -116,13 +116,18 @@ export default function DatabaseResetSection(props: Props) {
         </button>
       </div>
       {stage !== "idle" && (
-        <div className="modal-backdrop" role="presentation" onClick={close}>
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) close();
+          }}
+        >
           <div
             className="modal"
             role="alertdialog"
             aria-modal="true"
             aria-label={t("settings.dbResetConfirmTitle")}
-            onClick={(e) => e.stopPropagation()}
           >
             <h3>{t("settings.dbResetConfirmTitle")}</h3>
             <p className="sub">{t("settings.dbResetConfirmBody")}</p>
