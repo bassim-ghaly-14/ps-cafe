@@ -109,12 +109,6 @@ impl TokenStore {
         false
     }
 
-    pub fn revoke(&mut self, bearer: &str) -> bool {
-        let before = self.tokens.len();
-        self.tokens.retain(|t| !tokens_equal(&t.token, bearer));
-        self.tokens.len() != before
-    }
-
     pub fn revoke_all(&mut self) {
         self.tokens.clear();
     }
@@ -167,15 +161,6 @@ mod tests {
         assert!(!tokens_equal("abc", "abcd"));
     }
 
-    #[test]
-    fn issue_validate_revoke() {
-        let mut s = TokenStore::default();
-        let t = s.issue("Phone".into());
-        assert!(s.validate(&t.token));
-        assert!(!s.validate("pscafe_deadbeef"));
-        assert!(s.revoke(&t.token));
-        assert!(!s.validate(&t.token));
-    }
 
     #[test]
     fn expiry_and_cap() {
