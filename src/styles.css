@@ -204,6 +204,20 @@ body {
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
+/*
+ * Workday stamp: the date and the clock are LTR isolates so the browser
+ * cannot reorder the numeric date or push the meridiem into the middle of
+ * the timestamp. The meridiem stays in the surrounding RTL flow.
+ */
+.stamp-date,
+.stamp-time {
+  unicode-bidi: isolate;
+  direction: ltr;
+}
+.stamp-weekday,
+.stamp-dayperiod {
+  unicode-bidi: isolate;
+}
 .btn {
   font: inherit;
   font-size: 15px;

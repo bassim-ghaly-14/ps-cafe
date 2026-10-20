@@ -6,9 +6,9 @@ import {
   formatHours,
   formatNumber,
   formatRevenue,
-  formatWeekdayDateTime,
   liveHMS,
 } from "../utils/format";
+import WorkdayStamp from "../components/WorkdayStamp";
 import type { BusinessDay } from "../domain/types";
 
 interface DayAggregate {
@@ -77,11 +77,13 @@ export default function HistoryScreen({
                   <tr key={d.id} className={current ? "row-open" : undefined}>
                     <td>#{d.id}</td>
                     <td>
-                      {current
-                        ? t("day.currentRow")
-                        : startedValid
-                          ? formatWeekdayDateTime(startedAt)
-                          : t("common.dash")}
+                      {current ? (
+                        t("day.currentRow")
+                      ) : startedValid ? (
+                        <WorkdayStamp tsUtc={startedAt} showWeekday />
+                      ) : (
+                        t("common.dash")
+                      )}
                     </td>
                     <td>
                       {isOpen

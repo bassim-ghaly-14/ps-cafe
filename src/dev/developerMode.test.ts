@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetDbForTests } from "../db/client";
 import { __clearMemoryDb } from "../db/memory";
 import {
@@ -40,5 +40,14 @@ describe("devtools build flag", () => {
     expect(isDevtoolsEnabled()).toBe(true);
     __setDevtoolsForTests(false);
     expect(isDevtoolsEnabled()).toBe(false);
+  });
+  it("reads the opt-in VITE_ENABLE_DEVTOOLS env var", () => {
+    vi.stubEnv("VITE_ENABLE_DEVTOOLS", "1");
+    expect(isDevtoolsEnabled()).toBe(true);
+    vi.stubEnv("VITE_ENABLE_DEVTOOLS", "0");
+    expect(isDevtoolsEnabled()).toBe(false);
+    vi.stubEnv("VITE_ENABLE_DEVTOOLS", undefined);
+    expect(isDevtoolsEnabled()).toBe(false);
+    vi.unstubAllEnvs();
   });
 });

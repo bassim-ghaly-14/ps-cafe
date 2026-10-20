@@ -2,12 +2,12 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import StatCard from "../components/StatCard";
 import ConfirmDialog from "../components/ConfirmDialog";
+import WorkdayStamp from "../components/WorkdayStamp";
 import { useNow } from "../hooks/useNow";
 import type { CafeResult } from "../hooks/useCafe";
 import type { BusinessDay, RentalSession, Station } from "../domain/types";
 import type { DayAggregate } from "../repositories/sessionRepo";
 import {
-  formatDateTimeLocal,
   formatHours,
   formatNumber,
   formatRevenue,
@@ -119,8 +119,8 @@ export default function BusinessDayScreen(props: Props) {
             {openDay && (
               <div className="opened">
                 <span className="opened-label">{t("day.startedAt")}:</span>
-                <span className="opened-at" dir="ltr">
-                  {formatDateTimeLocal(openDay.startedAtUtc)}
+                <span className="opened-at">
+                  <WorkdayStamp tsUtc={openDay.startedAtUtc} />
                 </span>
               </div>
             )}

@@ -5,7 +5,7 @@ import * as dayRepo from "../repositories/businessDayRepo";
 import * as sessionRepo from "../repositories/sessionRepo";
 import * as stationRepo from "../repositories/stationRepo";
 import { sessionRevenueMinor } from "../domain/pricing";
-import { formatWeekdayDateTime } from "../utils/format";
+import { formatWeekdayDateTime, formatWorkdayStamp } from "../utils/format";
 
 beforeEach(() => {
   __clearMemoryDb();
@@ -132,15 +132,37 @@ describe("workday timestamp formatting", () => {
     const weekday = new Intl.DateTimeFormat("ar", { weekday: "long" }).format(
       date,
     );
-    const when = new Intl.DateTimeFormat("ar", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(date);
-    expect(formatWeekdayDateTime(t)).toBe(`${weekday} — ${when}`);
+    const stamp = formatWorkdayStamp(t);
+    expect(stamp.weekday).toBe(weekday);
+    expect(stamp.date).toContain("2026");
+    expect(stamp.time).toMatch(/\d{1,2}:\d{2}/);
+  });
+
+  it("emits no bidi control characters", () => {
+    const stamp = formatWorkdayStamp(Date.UTC(2026, 9, 17, 8, 30, 0));
+    for (const value of Object.values(stamp)) {
+      expect(value).not.toMatch(
+        /[\u200e\u200f\u061c\u202a-\u202e\u2066-\u2069]/,
+      );
+    }
+  });
+
+  it("splits date and time so the UI can isolate them", () => {
+    const stamp = formatWorkdayStamp(Date.UTC(2026, 9, 17, 8, 30, 0));
+    expect(stamp.date).not.toContain(":");
+    expect(stamp.time).not.toContain("/");
+    expect(stamp.date).toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/);
+  });
+
+  it("uses an Arabic comma separator for Arabic and a Latin one otherwise", () => {
+    const t = Date.UTC(2026, 9, 17, 8, 30, 0);
+    expect(formatWorkdayStamp(t, "ar").timeSeparator).toBe("، ");
+    expect(formatWorkdayStamp(t, "en").timeSeparator).toBe(", ");
   });
 
   it("is deterministic for the same timestamp", () => {
     const t = Date.UTC(2026, 9, 17, 8, 30, 0);
+    expect(formatWorkdayStamp(t)).toEqual(formatWorkdayStamp(t));
     expect(formatWeekdayDateTime(t)).toBe(formatWeekdayDateTime(t));
   });
 
