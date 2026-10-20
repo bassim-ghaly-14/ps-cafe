@@ -191,8 +191,17 @@ export default function SettingsScreen(props: Props) {
               <span className="set-name" title={s.name}>
                 {s.name}
               </span>
-              <span className="set-meta sub hide-sm">
-                {s.isActive ? t("settings.activate") : t("settings.deactivate")}
+              <span
+                className={`set-meta sub hide-sm ${
+                  s.isActive ? "pill on" : "pill"
+                }`}
+              >
+                <i className="dot" aria-hidden />
+                <span>
+                  {s.isActive
+                    ? t("settings.activate")
+                    : t("settings.deactivate")}
+                </span>
               </span>
               <span className="set-ops settings-station-actions">
                 <button
