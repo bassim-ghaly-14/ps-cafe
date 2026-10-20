@@ -4,3 +4,6 @@ dist/
 dist-internal/
 src-tauri/target/
 src-tauri/Wix/
+# Locally staged deterministic installer copies (CI renames; never commit).
+PS-Cafe-Setup-*.exe
+src-tauri/target/release/bundle/nsis/PS-Cafe-Setup-*.exe

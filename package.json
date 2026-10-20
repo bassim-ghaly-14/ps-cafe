@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "VITE_ENABLE_DEVTOOLS=1 vite",
     "build": "tsc --noEmit && vite build",
+    "build:prod": "tsc --noEmit && vite build",
     "build:internal": "VITE_ENABLE_DEVTOOLS=1 tsc --noEmit && VITE_ENABLE_DEVTOOLS=1 vite build --outDir dist-internal --emptyOutDir",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
@@ -15,6 +16,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "tauri": "tauri",
+    "clean:prod-bundles": "node scripts/clean-prod-bundles.mjs",
+    "prebuild:prod": "npm run clean:prod-bundles",
+    "build:prod:tauri": "tauri build",
     "tauri:internal": "tauri build --config src-tauri/tauri.internal.conf.json"
   },
   "dependencies": {

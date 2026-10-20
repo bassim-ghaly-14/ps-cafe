@@ -20,10 +20,6 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-interface PackageJson {
-  scripts: Record<string, string>;
-}
-
 interface TauriConfig {
   productName: string;
   identifier: string;
@@ -36,11 +32,15 @@ interface TauriConfig {
   bundle?: { active?: boolean; targets?: string[] };
 }
 
+interface PackageScripts {
+  [name: string]: string;
+}
+
 function readJson<T>(relativePath: string): T {
   return JSON.parse(readFileSync(join(ROOT, relativePath), "utf8")) as T;
 }
 
-const pkg = readJson<PackageJson>("package.json");
+const pkg = readJson<{ scripts: PackageScripts }>("package.json");
 const prodTauri = readJson<TauriConfig>("src-tauri/tauri.conf.json");
 const internalTauri = readJson<TauriConfig>(
   "src-tauri/tauri.internal.conf.json",
@@ -67,8 +67,32 @@ describe("frontend build scripts", () => {
 
 describe("tauri desktop build configuration", () => {
   it("default (production) tauri build uses the production frontend", () => {
-    expect(prodTauri.build.beforeBuildCommand).toBe("npm run build");
+    expect(prodTauri.build.beforeBuildCommand).toBe("npm run build:prod");
     expect(prodTauri.build.frontendDist).toBe("../dist");
+  });
+
+  it("canonical production command exists and never builds internal", () => {
+    expect(pkg.scripts["build:prod"]).toBeDefined();
+    expect(pkg.scripts["build:prod"]).not.toContain("internal");
+    expect(pkg.scripts["build:prod"]).not.toContain("VITE_ENABLE_DEVTOOLS=1");
+    expect(pkg.scripts["build:prod:tauri"]).toContain("tauri build");
+    expect(pkg.scripts["build:prod:tauri"]).not.toContain("internal");
+    expect(pkg.scripts["clean:prod-bundles"]).toContain(
+      "clean-prod-bundles.mjs",
+    );
+    expect(pkg.scripts["prebuild:prod"]).toContain("clean:prod-bundles");
+  });
+
+  it("production bundle targets installers, not redundant formats", () => {
+    expect(prodTauri.bundle?.targets).toContain("nsis");
+    expect(prodTauri.bundle?.targets).toContain("dmg");
+    expect(prodTauri.bundle?.targets).not.toContain("app");
+    expect(prodTauri.bundle?.targets).not.toContain("msi");
+  });
+
+  it("production identifier is a valid reverse-DNS id (not a reserved TLD)", () => {
+    expect(prodTauri.identifier).not.toMatch(/\.app$/);
+    expect(prodTauri.identifier).toBe("com.pscafe.desktop");
   });
 
   it("internal tauri build uses the internal frontend bundle", () => {

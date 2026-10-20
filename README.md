@@ -38,18 +38,38 @@ durable history, statistics, and station configuration — no internet required.
 | `npm run lint` | Prettier format check |
 | `npm run format` | Prettier write |
 | `npm run build` | typecheck + production frontend bundle (devtools OFF) |
+| `npm run build:prod` | canonical production frontend bundle (devtools OFF) + safe cleanup of stale production installers first |
+| `npm run clean:prod-bundles` | remove only stale production installers (`PS Cafe_*.exe`, `PS-Cafe-Setup-*.exe`, `PS Cafe_*.dmg`); preserves caches, databases, sources, Git history |
+| `npm run build:prod:tauri` | canonical local production desktop build (production Tauri config only; never builds internal) |
 | `npm run build:internal` | internal testing bundle with devtools ON (never ship to the cafe) |
 | `npx tauri dev` | desktop shell in dev mode (real SQLite in app-data dir) |
-| `npx tauri build` | release build + platform bundles (devtools OFF) |
 | `npm run tauri:internal` | internal desktop build with devtools ON (never ship to the cafe) |
+
+Canonical local production build:
+
+```bash
+npm run build:prod:tauri
+```
+
+This builds ONLY the production app (`PS Cafe`, `com.pscafe.desktop`) and never
+triggers `tauri.internal.conf.json`. `npm run build:prod` runs first via
+Tauri's `beforeBuildCommand` (typecheck + Vite `dist/`). `npm run
+clean:prod-bundles` runs first via the `prebuild:prod` hook so a stale
+installer never sits next to the fresh one. Rust incremental caches are
+preserved; no database, user config, source, or Git data is touched.
 
 ## Database
 - **Engine:** SQLite via `tauri-plugin-sql`, file `ps-cafe.db`.
 - **Location (production):** Tauri app-data directory, e.g.
-  - Windows: `%APPDATA%\com.pscafe.app\ps-cafe.db`
-  - macOS: `~/Library/Application Support/com.pscafe.app/ps-cafe.db`
-  - Linux: `~/.local/share/com.pscafe.app/ps-cafe.db`
+  - Windows: `%APPDATA%\com.pscafe.desktop\ps-cafe.db`
+  - macOS: `~/Library/Application Support/com.pscafe.desktop/ps-cafe.db`
+  - Linux: `~/.local/share/com.pscafe.desktop/ps-cafe.db`
   Never in the installation directory or `dist/`. Updates do not overwrite it.
+  - Identifier change notice: `com.pscafe.app` (pre-release) became
+    `com.pscafe.desktop` before the first official Windows release. There are
+    no deployed installations to migrate; a fresh install uses the new path.
+    The internal build (`com.pscafe.desktop.internal`) keeps its own separate
+    database.
 - **Browser/dev fallback:** when not running inside Tauri (plain `npm run dev`
   or tests), a localStorage-backed interpreter of the same SQL subset is used so
   the UI is fully exercisable without a desktop shell. Production always uses
@@ -63,18 +83,27 @@ durable history, statistics, and station configuration — no internet required.
   the app is closed. Restore by placing the file back in the app-data dir.
 
 ## Building for Windows 10
-This project was developed and verified on macOS. To produce the Windows NSIS
-installer:
-1. On a Windows 10+ machine install: Node 20+, Rust (msvc toolchain), WebView2
-   Runtime, and the Tauri 2 prerequisites.
-2. Clone the repo, run `npm install`.
-3. Run `npx tauri build`.
-4. The installer appears at `src-tauri/target/release/bundle/nsis/PS Cafe_0.1.0_x64-setup.exe`.
+Windows installers are built automatically by GitHub Actions
+(`.github/workflows/windows-build.yml`): every push to `main` builds the
+production NSIS installer on a `windows-latest` runner and uploads it as a
+traceable artifact named `ps-cafe-windows-<short-sha>-run-<run-number>`
+(retention: 14 days). Version tags (`v0.1.0`) trigger
+`.github/workflows/release.yml`, which attaches `PS-Cafe-Setup-0.1.0.exe` to
+the versioned GitHub Release.
 
-The NSIS target is already configured in `src-tauri/tauri.conf.json`
-(`"targets": ["app", "dmg", "nsis"]` — each platform builds the targets it
-supports). The Windows `.exe` was not built in this macOS environment; the same
-`tauri build` command applies on Windows.
+To build manually on a Windows 10+ machine (Node 20+, Rust msvc toolchain,
+WebView2 runtime, Tauri 2 prerequisites):
+1. Clone the repo, run `npm ci`.
+2. Run `npm run build:prod:tauri`.
+3. The installer appears at `src-tauri/target/release/bundle/nsis/PS Cafe_0.1.0_x64-setup.exe`
+   (CI additionally stages a deterministic copy named `PS-Cafe-Setup-0.1.0.exe`).
+
+The production config targets `["dmg", "nsis"]` (each platform builds the
+targets it supports; no redundant MSI). The Windows `.exe` cannot be produced
+on macOS — macOS builds only verify the frontend, typecheck, Rust checks, and
+the DMG path. Windows 10 compatibility (installer identity, x64 arch,
+offline-first resources, WebView2 prerequisite) is asserted by the CI verify
+step; on-device Windows 10 testing has not been performed in this environment.
 
 ## Offline guarantees
 - No network calls in application code. The frontend bundle contains no CDN
@@ -120,10 +149,10 @@ This uses the overlay config `src-tauri/tauri.internal.conf.json`, which:
 
 | Setting | Production (`tauri.conf.json`) | Internal (`tauri.internal.conf.json`) |
 | --- | --- | --- |
-| `beforeBuildCommand` | `npm run build` | `npm run build:internal` |
+| `beforeBuildCommand` | `npm run build:prod` | `npm run build:internal` |
 | `frontendDist` | `../dist` | `../dist-internal` |
 | `productName` | `PS Cafe` | `PS Cafe Internal` |
-| `identifier` | `com.pscafe.app` | `com.pscafe.app.internal` |
+| `identifier` | `com.pscafe.desktop` | `com.pscafe.desktop.internal` |
 
 Notes:
 - The two builds use **separate output directories** (`dist/` vs
@@ -133,7 +162,7 @@ Notes:
   directory and its own `ps-cafe.db`**, so internal testing never touches
   production data. The internal app is installed and launched as a distinct
   application ("PS Cafe Internal").
-- The production config is untouched: `npx tauri build` keeps building the
+- The production config is untouched: `npm run build:prod:tauri` keeps building the
   production app with the developer section compiled out.
 - `dist-internal/` is git-ignored and is never embedded in a production build.
 
