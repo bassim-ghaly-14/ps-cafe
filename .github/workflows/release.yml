@@ -85,10 +85,57 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
-            choco install nsis -y --no-progress
+
+          $nsisStandardPaths = @(
+            'C:\Program Files (x86)\NSIS\makensis.exe',
+            'C:\Program Files (x86)\NSIS\Bin\makensis.exe',
+            'C:\Program Files\NSIS\makensis.exe',
+            'C:\Program Files\NSIS\Bin\makensis.exe'
+          )
+
+          $makensisPath = $null
+
+          # Prefer command resolution (covers NSIS preinstalled on the runner).
+          if (-not $makensisPath) {
+            $cmd = Get-Command makensis -ErrorAction SilentlyContinue
+            if ($cmd) { $makensisPath = $cmd.Source }
           }
-          makensis -VERSION
+
+          # Install NSIS via Chocolatey only if makensis is still not found.
+          if (-not $makensisPath) {
+            choco install nsis -y --no-progress
+            if ($LASTEXITCODE -ne 0) {
+              throw "Chocolatey install of NSIS failed with exit code $LASTEXITCODE."
+            }
+            $cmd = Get-Command makensis -ErrorAction SilentlyContinue
+            if ($cmd) { $makensisPath = $cmd.Source }
+          }
+
+          # Otherwise check the standard NSIS installation paths.
+          if (-not $makensisPath) {
+            foreach ($p in $nsisStandardPaths) {
+              if (Test-Path $p) {
+                $makensisPath = $p
+                break
+              }
+            }
+          }
+
+          # Verify the resolved executable exists before invoking it.
+          if (-not $makensisPath -or -not (Test-Path $makensisPath)) {
+            throw "NSIS is installed but makensis.exe could not be located. Checked paths: $($nsisStandardPaths -join ', ')."
+          }
+
+          $nsisDir = Split-Path -Parent $makensisPath
+
+          # Add the NSIS bin directory to the current PowerShell process's PATH.
+          $env:PATH = "$env:PATH;$nsisDir"
+
+          # Record the directory in GitHub Actions' persistent workflow PATH.
+          "$nsisDir" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+          # Run the version check against the resolved executable path.
+          & $makensisPath -VERSION
 
       - name: Build production Windows installer (NSIS, production config only)
         run: npm run build:prod:tauri
