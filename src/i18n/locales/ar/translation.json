@@ -79,7 +79,7 @@
     "title": "الإعدادات",
     "cardsTitle": "كروت الأجهزة",
     "colName": "الاسم",
-    "colActive": "مفعّل",
+    "colActive": "حالة الجهاز",
     "colActions": "إجراءات",
     "add": "إضافة جهاز",
     "deviceCount": "{{count}} جهاز",

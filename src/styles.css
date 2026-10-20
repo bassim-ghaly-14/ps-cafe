@@ -238,6 +238,14 @@ body {
   color: var(--text);
   border-color: var(--line);
 }
+/* Copy-success feedback: the ghost copy button briefly adopts the primary
+   (green) look while the "تم النسخ" label is shown, then the class is
+   dropped and the ghost styling returns untouched. */
+.btn.ghost.copied {
+  background: var(--ok);
+  color: #04101a;
+  border-color: transparent;
+}
 .btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
@@ -327,7 +335,9 @@ tr.row-open td {
   background: rgba(46, 230, 255, 0.08);
 }
 .cards {
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  /* Devices grid: always exactly 2 per row on desktop/large screens,
+     dropping to 1 per row in the mobile media query below. */
+  grid-template-columns: repeat(2, 1fr);
 }
 .card {
   background: var(--panel);
@@ -799,7 +809,7 @@ input:focus-visible,
     font-size: 24px;
   }
   .cards {
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    grid-template-columns: 1fr;
   }
 }
 @media (max-width: 480px) {

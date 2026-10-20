@@ -177,7 +177,11 @@ export default function LanPairView(props: Props) {
             {pairing.payload}
           </p>
           <div className="row2">
-            <button type="button" className="btn ghost" onClick={copyUrl}>
+            <button
+              type="button"
+              className={`btn ghost${copied ? " copied" : ""}`}
+              onClick={copyUrl}
+            >
               <Copy size={16} aria-hidden />
               <span>{copied ? t("lan.copied") : t("lan.copy")}</span>
             </button>
