@@ -12,6 +12,8 @@ import {
 import { formatRateMajor } from "../domain/pricing";
 import ConfirmDialog from "../components/ConfirmDialog";
 import DeveloperSection from "../components/DeveloperSection";
+import LanPanel from "../components/LanPanel";
+import { isLanClient } from "../db/client";
 import type { CafeResult } from "../hooks/useCafe";
 import type { RentalSession, Station } from "../domain/types";
 import type { DemoScenarioId } from "../dev/demoMode";
@@ -268,15 +270,18 @@ export default function SettingsScreen(props: Props) {
           {t("settings.note")}
         </p>
       </div>
-      <DeveloperSection
-        demoActive={demoActive}
-        demoScenario={demoScenario}
-        demoError={demoError}
-        busy={busy}
-        onEnter={onDemoEnter}
-        onReseed={onDemoReseed}
-        onExit={onDemoExit}
-      />
+      <LanPanel setNotice={setNotice} />
+      {!isLanClient() && (
+        <DeveloperSection
+          demoActive={demoActive}
+          demoScenario={demoScenario}
+          demoError={demoError}
+          busy={busy}
+          onEnter={onDemoEnter}
+          onReseed={onDemoReseed}
+          onExit={onDemoExit}
+        />
+      )}
     </section>
   );
 

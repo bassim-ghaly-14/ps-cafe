@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FlaskConical } from "lucide-react";
 import BottomNav, { useActiveTabState } from "./components/BottomNav";
+import LanBanner from "./components/LanBanner";
 import Splash from "./components/Splash";
 import BusinessDayScreen from "./screens/BusinessDayScreen";
 import HistoryScreen from "./screens/HistoryScreen";
@@ -241,6 +242,7 @@ export default function App() {
         </div>
       </header>
       <main className="main">
+        <LanBanner />
         {detailId !== null ? (
           <StationDetailsScreen
             key={detailId}

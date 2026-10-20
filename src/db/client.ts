@@ -2,6 +2,7 @@ import type { DbPort } from "./port";
 import { RepoError } from "./port";
 import { CURRENT_SCHEMA_VERSION, MIGRATIONS } from "./migrations";
 import { createMemoryPort } from "./memory";
+import { createHttpPort, readLanToken } from "./http";
 
 /**
  * Database entry point. Production (Tauri) uses real SQLite via
@@ -16,12 +17,12 @@ import { createMemoryPort } from "./memory";
 
 let port: DbPort | null = null;
 let initPromise: Promise<DbPort> | null = null;
-let backend: "tauri" | "memory" = "memory";
+let backend: "tauri" | "memory" | "lan" = "memory";
 
 /** Isolated demo database installed while Developer Mode is active. */
 let overridePort: DbPort | null = null;
 
-export function getBackend(): "tauri" | "memory" {
+export function getBackend(): "tauri" | "memory" | "lan" {
   return backend;
 }
 
@@ -30,6 +31,23 @@ function isTauriRuntime(): boolean {
     typeof window !== "undefined" &&
     ("__TAURI_INTERNALS__" in window || "__TAURI__" in window)
   );
+}
+
+/**
+ * True when this page was served by the desktop LAN gateway (the server
+ * injects `window.__PSCAFE_LAN__` into the served index.html), i.e. a
+ * paired phone browser — not the desktop Tauri webview.
+ */
+export function isLanClient(): boolean {
+  try {
+    return (
+      typeof window !== "undefined" &&
+      (window as unknown as Record<string, unknown>).__PSCAFE_LAN__ === 1 &&
+      !isTauriRuntime()
+    );
+  } catch {
+    return false;
+  }
 }
 
 /** Use App.tsx + all repositories call this. Safe to call repeatedly. */
@@ -111,6 +129,15 @@ async function init(): Promise<DbPort> {
     }
   }
 
+  // Paired phone browser: reuse the desktop database over the LAN
+  // gateway. No local migrations/seeding here — the desktop owns the
+  // schema; the gateway rejects DDL anyway.
+  if (isLanClient() && readLanToken()) {
+    const http = createHttpPort();
+    backend = "lan";
+    return http;
+  }
+
   const mem = createMemoryPort();
 
   await runMigrations(mem);
@@ -127,10 +154,7 @@ async function readSchemaVersion(db: DbPort): Promise<number> {
       "SELECT version FROM schema_meta",
     );
 
-    return rows.reduce(
-      (latest, row) => Math.max(latest, row.version),
-      0,
-    );
+    return rows.reduce((latest, row) => Math.max(latest, row.version), 0);
   } catch {
     return 0;
   }

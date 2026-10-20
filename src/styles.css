@@ -758,3 +758,102 @@ input:focus-visible,
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* LAN gateway panel (Settings QR) + phone client chrome. */
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 6px 0;
+}
+.switch input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--ok);
+  cursor: pointer;
+}
+.lan-qr {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  text-align: center;
+}
+.lan-qr-img {
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px;
+  width: min(280px, 100%);
+}
+.lan-qr-img svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.lan-url {
+  font-family: var(--mono);
+  font-size: 12px;
+  word-break: break-all;
+  max-width: 100%;
+}
+.lan-banner {
+  border-color: var(--ok);
+}
+/* Touch-first responsive audit (phones ≤480px, small tablets ≤760px). */
+@media (max-width: 760px) {
+  .app {
+    padding: 14px 12px 130px;
+  }
+  .box {
+    padding: 16px;
+  }
+  .stats {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+  .stat b {
+    font-size: 24px;
+  }
+  .cards {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  }
+}
+@media (max-width: 480px) {
+  .btn,
+  .mini,
+  .nav-item {
+    min-height: 44px;
+  }
+  .btn {
+    padding: 12px 18px;
+    font-size: 16px;
+  }
+  .nav-item {
+    min-width: 0;
+    flex: 1 1 0;
+    padding: 10px 6px;
+  }
+  .day-ctl {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .day-ctl .btn {
+    width: 100%;
+  }
+  .clock {
+    font-size: 30px;
+    text-align: center;
+  }
+  .card .time {
+    font-size: 28px;
+  }
+  .modal {
+    padding: 18px;
+  }
+  .modal-actions .btn {
+    flex: 1 1 100%;
+  }
+  .lan-qr-img {
+    width: min(240px, 92vw);
+  }
+}
