@@ -7,14 +7,15 @@
   "scripts": {
     "dev": "VITE_ENABLE_DEVTOOLS=1 vite",
     "build": "tsc --noEmit && vite build",
-    "build:internal": "VITE_ENABLE_DEVTOOLS=1 tsc --noEmit && VITE_ENABLE_DEVTOOLS=1 vite build",
+    "build:internal": "VITE_ENABLE_DEVTOOLS=1 tsc --noEmit && VITE_ENABLE_DEVTOOLS=1 vite build --outDir dist-internal --emptyOutDir",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "prettier --check \"src/**/*.{ts,tsx,css}\"",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"docs/**/*.md\"",
     "test": "vitest run",
     "test:watch": "vitest",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:internal": "tauri build --config src-tauri/tauri.internal.conf.json"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "PS Cafe Internal",
+  "identifier": "com.pscafe.app.internal",
+  "build": {
+    "frontendDist": "../dist-internal",
+    "beforeBuildCommand": "npm run build:internal"
+  }
+}

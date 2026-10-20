@@ -90,6 +90,22 @@ Consequence: demo edits can never contaminate production; production
 `npm run build` has no toggle. The PIN is an accidental-access barrier,
 not authentication — documented, never logged, no remote auth.
 
+### ADR-016a — Internal desktop build overlay
+Context: the developer section is compile-time gated, so a *desktop* build
+also needs a gated variant; the production desktop app must keep the toggle
+compiled out.
+Decision: `src-tauri/tauri.internal.conf.json` overlays the base Tauri config
+with `beforeBuildCommand: npm run build:internal`, `frontendDist:
+../dist-internal`, and a distinct app identity (`PS Cafe Internal` /
+`com.pscafe.app.internal`). Built via `npm run tauri:internal`. The two builds
+use separate frontend output dirs (`dist/` vs `dist-internal/`) so neither can
+overwrite the other's bundle, and the distinct `identifier` gives the internal
+app its own app-data dir and its own `ps-cafe.db`.
+Consequence: the production config is untouched (`npx tauri build` still
+ships the toggle-free app), internal testing never touches production data,
+and the internal app installs as a separate application. `src/dev/buildConfig.test.ts`
+pins this wiring so a regression fails CI rather than shipping the wrong bundle.
+
 ## ADR-020 — Per-device hourly pricing + proportional revenue (supersedes ADR-009)
 Context: business owner wants per-device hourly rate and device-level revenue
 history; ADR-009 excluded billing fields in v1. Adding pricing now is additive

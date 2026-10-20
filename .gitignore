@@ -1,5 +1,6 @@
 /Users/apple9/DOC/ps-cafe/ps-cafe-mockup.html
 node_modules/
 dist/
+dist-internal/
 src-tauri/target/
 src-tauri/Wix/

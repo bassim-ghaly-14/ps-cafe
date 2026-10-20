@@ -40,7 +40,8 @@ durable history, statistics, and station configuration — no internet required.
 | `npm run build` | typecheck + production frontend bundle (devtools OFF) |
 | `npm run build:internal` | internal testing bundle with devtools ON (never ship to the cafe) |
 | `npx tauri dev` | desktop shell in dev mode (real SQLite in app-data dir) |
-| `npx tauri build` | release build + platform bundles |
+| `npx tauri build` | release build + platform bundles (devtools OFF) |
+| `npm run tauri:internal` | internal desktop build with devtools ON (never ship to the cafe) |
 
 ## Database
 - **Engine:** SQLite via `tauri-plugin-sql`, file `ps-cafe.db`.
@@ -102,4 +103,41 @@ supports). The Windows `.exe` was not built in this macOS environment; the same
 - The fixed PIN is an accidental-access barrier for a local tool, not strong
   authentication. Full policy, scenarios, and isolation guarantees are in
   `docs/POST_RELEASE_HARDENING_REPORT.md`.
+
+### Internal desktop build
+
+The Developer Tools section is a **compile-time** feature: it only exists in a
+bundle built with `VITE_ENABLE_DEVTOOLS=1`. A plain `npm run build` bundle has
+it compiled out entirely.
+
+To produce a desktop (Tauri) app that includes the developer section:
+
+```bash
+npm run tauri:internal
+```
+
+This uses the overlay config `src-tauri/tauri.internal.conf.json`, which:
+
+| Setting | Production (`tauri.conf.json`) | Internal (`tauri.internal.conf.json`) |
+| --- | --- | --- |
+| `beforeBuildCommand` | `npm run build` | `npm run build:internal` |
+| `frontendDist` | `../dist` | `../dist-internal` |
+| `productName` | `PS Cafe` | `PS Cafe Internal` |
+| `identifier` | `com.pscafe.app` | `com.pscafe.app.internal` |
+
+Notes:
+- The two builds use **separate output directories** (`dist/` vs
+  `dist-internal/`) so a normal `npm run build` can never overwrite the
+  internal bundle, and vice versa.
+- The separate `identifier` gives the internal app its **own app-data
+  directory and its own `ps-cafe.db`**, so internal testing never touches
+  production data. The internal app is installed and launched as a distinct
+  application ("PS Cafe Internal").
+- The production config is untouched: `npx tauri build` keeps building the
+  production app with the developer section compiled out.
+- `dist-internal/` is git-ignored and is never embedded in a production build.
+
+`src/dev/buildConfig.test.ts` asserts this wiring (correct build command,
+correct `frontendDist`, and distinct app identity) so a regression fails the
+test suite rather than silently shipping the wrong bundle.
 
