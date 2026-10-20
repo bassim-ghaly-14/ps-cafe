@@ -6,16 +6,13 @@ import { fileURLToPath } from "node:url";
 /**
  * Build-configuration regression tests.
  *
- * The Developer Tools section is a *compile-time* feature: it is only present
- * when `VITE_ENABLE_DEVTOOLS === "1"`. That makes the build scripts and the
- * Tauri configuration part of the security surface of the app — if a
- * production build ever picks up the internal flag (or the internal build
- * silently falls back to the production frontend), the developer tools would
- * be exposed to the cafe.
- *
- * These tests assert the wiring in package.json / tauri.conf.json /
- * tauri.internal.conf.json so that regression is caught by `npm test` rather
- * than by manual inspection of a built bundle.
+ * Developer Mode is always visible in Settings now (PIN-gated activation;
+ * PIN centralized in src/dev/developerMode.ts), so the VITE_ENABLE_DEVTOOLS
+ * script prefix no longer controls UI visibility. The internal build still
+ * exists as a separate bundle with its own output dir, identifier and
+ * product name, so these tests keep guarding that production and internal
+ * builds stay wired to their own frontends and never share an output dir —
+ * caught by `npm test` rather than by manual inspection of a built bundle.
  */
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");

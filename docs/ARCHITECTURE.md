@@ -1,6 +1,7 @@
 # Architecture — PS Café
 
 ## 1. Layers (responsibilities, not file-per-function)
+
 ```
 Presentation   screens/, components/             — render + events only, no SQL, no rules
 Application    hooks/                            — orchestration, timers, splash/tab lifecycle
@@ -15,6 +16,7 @@ Components never import from `db/` or `repositories/` directly; they use hooks.
 Domain never imports SQL, Tauri APIs, or React.
 
 ## 2. Source directory structure (final)
+
 ```
 src/
   main.tsx                 entry: awaits i18n readyPromise, applies RTL, mounts App
@@ -35,7 +37,7 @@ src/
     StationCard.tsx        idle/running states, live timer, per-day footer
     ConfirmDialog.tsx      app-styled modal (no browser alert/confirm anywhere)
     PinDialog.tsx          masked numeric PIN gate for Developer Mode
-    DeveloperSection.tsx   PIN-gated demo controls (dev builds only)
+    DeveloperSection.tsx   PIN-gated demo controls (always visible; Demo Mode starts inactive)
   hooks/
     useCafe.ts             useCafeData (state + refresh) + useCafeActions (all mutations
                            with domain re-validation, error codes → i18n keys)
@@ -56,7 +58,7 @@ src/
     memory.ts              localStorage/ephemeral interpreter of the SQL subset used by repos
     migrations.ts          versioned DDL (v1); schema.sql mirrors it
   dev/
-    developerMode.ts       compile-time devtools flag (isDevtoolsEnabled), PIN verify
+    developerMode.ts       Developer PIN verify (PIN 2214, never persisted)
     demoSeed.ts            demo scenario constants + raw seeding helpers (open/close day,
                            completed session) — same SQL + constraints as production
     demoMode.ts            build/enter/reseed/exit demo DB, seed scenarios
@@ -74,6 +76,7 @@ src-tauri/
 ```
 
 ## 3. Integration boundaries
+
 - **React ↔ SQLite:** only via `repositories/*` calling the `DbPort` from `db/client.ts`.
   Inside Tauri the port wraps plugin-sql (real SQLite, app-data dir); outside Tauri it
   wraps the memory interpreter. No raw `execute/select` in screens/hooks.
@@ -87,6 +90,7 @@ src-tauri/
   business truth always re-read from the database on launch.
 
 ## 4. Error handling
+
 Repositories throw typed `RepoError { code, message }`; `useCafeActions` maps codes to
 i18n keys; screens show inline notices or dialogs, never silent fail. Mutations
 re-validate preconditions so double-clicks/retries cannot create duplicates (partial
@@ -94,16 +98,19 @@ unique indexes as last line of defense). DB init failure renders a full Arabic e
 screen with a retry action.
 
 ## 5. i18n rules
+
 All user-facing strings live in `src/i18n/locales/ar/translation.json`. Components call
 `t('section.key')`. Never hardcode Arabic (or English) literals in JSX. Future language:
 add `locales/<lang>/translation.json` + `SUPPORTED_LANGS` entry; no component changes.
 
 ## 6. Rules for future features
+
 1. New rule → `domain/` + unit test first. 2. New persistence → migration + repo method.
-3. New screen → hook + screen, never SQL in component. 4. New dep → ADR in DECISIONS.md.
-5. New string → translation JSON only.
+2. New screen → hook + screen, never SQL in component. 4. New dep → ADR in DECISIONS.md.
+3. New string → translation JSON only.
 
 ## 7. Anti-patterns (forbidden)
+
 SQL in components; tick-accumulated timers; calendar-date as day id; footer element;
 top tabs; emoji icons; `any`/assertions for domain types; broad Tauri capabilities;
 in-memory SQLite for production; DB file under `src/`; auto open/close of days or

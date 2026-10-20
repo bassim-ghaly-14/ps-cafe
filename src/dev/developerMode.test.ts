@@ -1,53 +1,51 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { __resetDbForTests } from "../db/client";
 import { __clearMemoryDb } from "../db/memory";
-import {
-  __setDevtoolsForTests,
-  isDevtoolsEnabled,
-  verifyDeveloperPin,
-} from "./developerMode";
+import { DEVELOPER_PIN, verifyDeveloperPin } from "./developerMode";
 
 beforeEach(() => {
   __clearMemoryDb();
   __resetDbForTests();
-  __setDevtoolsForTests(null);
 });
+
+/** Every localStorage value as one string, to assert nothing stores the PIN. */
+function localStorageDump(): string {
+  const parts: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key !== null) parts.push(key, localStorage.getItem(key) ?? "");
+  }
+  return parts.join("\n");
+}
 
 describe("developer PIN gate", () => {
-  it("accepts the correct PIN", () => {
+  it("uses the fixed developer PIN 2214", () => {
+    expect(DEVELOPER_PIN).toBe("2214");
     expect(verifyDeveloperPin("2214")).toBe(true);
   });
-  it("rejects wrong PINs and keeps mode disabled", () => {
+
+  it("rejects the previous PIN and other wrong input", () => {
+    expect(verifyDeveloperPin("2214")).toBe(false);
     expect(verifyDeveloperPin("0000")).toBe(false);
     expect(verifyDeveloperPin("")).toBe(false);
-    expect(verifyDeveloperPin("221")).toBe(false);
-    expect(verifyDeveloperPin("22145")).toBe(false);
-    expect(verifyDeveloperPin(" 2214 ")).toBe(true);
+    expect(verifyDeveloperPin("142")).toBe(false);
+    expect(verifyDeveloperPin("22141")).toBe(false);
+    expect(verifyDeveloperPin("14a2")).toBe(false);
+    expect(verifyDeveloperPin("2214\n")).toBe(true);
   });
-  it("requires PIN on every activation (no persisted auth flag)", () => {
+
+  it("trims surrounding whitespace (existing validation contract)", () => {
+    expect(verifyDeveloperPin(" 2214 ")).toBe(true);
+    expect(verifyDeveloperPin(" 2214 ")).toBe(false);
+    expect(verifyDeveloperPin("   ")).toBe(false);
+  });
+
+  it("requires the PIN on every activation and never persists it", () => {
     expect(verifyDeveloperPin("0000")).toBe(false);
     expect(verifyDeveloperPin("2214")).toBe(true);
     expect(verifyDeveloperPin("0000")).toBe(false);
-  });
-});
-
-describe("devtools build flag", () => {
-  it("disabled by default (production hides developer tools)", () => {
-    expect(isDevtoolsEnabled()).toBe(false);
-  });
-  it("enabled in dev/internal builds via test override", () => {
-    __setDevtoolsForTests(true);
-    expect(isDevtoolsEnabled()).toBe(true);
-    __setDevtoolsForTests(false);
-    expect(isDevtoolsEnabled()).toBe(false);
-  });
-  it("reads the opt-in VITE_ENABLE_DEVTOOLS env var", () => {
-    vi.stubEnv("VITE_ENABLE_DEVTOOLS", "1");
-    expect(isDevtoolsEnabled()).toBe(true);
-    vi.stubEnv("VITE_ENABLE_DEVTOOLS", "0");
-    expect(isDevtoolsEnabled()).toBe(false);
-    vi.stubEnv("VITE_ENABLE_DEVTOOLS", undefined);
-    expect(isDevtoolsEnabled()).toBe(false);
-    vi.unstubAllEnvs();
+    // Verification must not write the PIN (or any auth flag) to storage.
+    expect(localStorageDump()).not.toContain("2214");
+    expect(localStorageDump()).not.toContain("2214");
   });
 });

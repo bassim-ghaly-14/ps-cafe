@@ -7,7 +7,6 @@ import {
   setDbOverride,
 } from "../db/client";
 import { __clearMemoryDb } from "../db/memory";
-import { __setDevtoolsForTests } from "./developerMode";
 import {
   buildDemoDb,
   enterDemoMode,
@@ -21,7 +20,6 @@ import * as stationRepo from "../repositories/stationRepo";
 beforeEach(() => {
   __clearMemoryDb();
   __resetDbForTests();
-  __setDevtoolsForTests(null);
 });
 
 describe("demo database isolation", () => {

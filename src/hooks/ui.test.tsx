@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import {
   cleanup,
   render,
@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { __clearMemoryDb } from "../db/memory";
-import { __resetDbForTests as resetClient } from "../db/client";
+import { __resetDbForTests as resetClient, isDemoDbActive } from "../db/client";
 import App from "../App";
 import { readyPromise } from "../i18n";
 import { ACTIVE_TAB_KEY } from "../constants";
@@ -278,26 +278,8 @@ describe("settings action controls", () => {
 });
 
 describe("developer mode availability", () => {
-  it("developer section is hidden in a normal production build", async () => {
-    const { __setDevtoolsForTests } = await import("../dev/developerMode");
-    __setDevtoolsForTests(false);
-    await renderReadyApp();
-    fireEvent.click(screen.getByRole("button", { name: "الإعدادات" }));
-    await waitFor(() =>
-      expect(
-        screen.getAllByRole("button", { name: "تعديل" }).length,
-      ).toBeGreaterThan(0),
-    );
-    expect(screen.queryByText("وضع المطور")).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: "تفعيل وضع المطور" }),
-    ).toBeNull();
-    __setDevtoolsForTests(null);
-  });
-
-  it("developer section appears in a dev build and gates on PIN", async () => {
-    const { __setDevtoolsForTests } = await import("../dev/developerMode");
-    __setDevtoolsForTests(true);
+  it("renders when the devtools env flag is absent, and stays inactive", async () => {
+    vi.stubEnv("VITE_ENABLE_DEVTOOLS", undefined);
     try {
       await renderReadyApp();
       fireEvent.click(screen.getByRole("button", { name: "الإعدادات" }));
@@ -306,31 +288,90 @@ describe("developer mode availability", () => {
           screen.getByRole("button", { name: "تفعيل وضع المطور" }),
         ).toBeInTheDocument(),
       );
-      fireEvent.click(screen.getByRole("button", { name: "تفعيل وضع المطور" }));
-      await waitFor(() =>
-        expect(screen.getByRole("alertdialog")).toBeInTheDocument(),
-      );
-      // Masked numeric input.
-      const input = screen.getByLabelText("الرمز") as HTMLInputElement;
-      expect(input.type).toBe("password");
-      expect(input.inputMode).toBe("numeric");
-      // Wrong PIN keeps mode disabled with an Arabic validation message.
-      fireEvent.change(input, { target: { value: "0000" } });
-      fireEvent.click(screen.getAllByRole("button", { name: "تاكيد" })[0]!);
-      await waitFor(() =>
-        expect(screen.getByText("الرمز غير صحيح")).toBeInTheDocument(),
-      );
+      // Visible but inactive on a fresh launch: no demo banner, no demo DB.
       expect(screen.queryByText("بيانات تجريبية — ليست حقيقية")).toBeNull();
-      // Correct PIN activates the simulated environment banner.
-      fireEvent.change(input, { target: { value: "2214" } });
-      fireEvent.click(screen.getAllByRole("button", { name: "تاكيد" })[0]!);
+      expect(isDemoDbActive()).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("renders in production-like conditions (former capability flag off)", async () => {
+    vi.stubEnv("VITE_ENABLE_DEVTOOLS", "0");
+    try {
+      await renderReadyApp();
+      fireEvent.click(screen.getByRole("button", { name: "الإعدادات" }));
       await waitFor(() =>
         expect(
-          screen.getAllByText("بيانات تجريبية — ليست حقيقية").length,
-        ).toBeGreaterThan(0),
+          screen.getByRole("button", { name: "تفعيل وضع المطور" }),
+        ).toBeInTheDocument(),
       );
+      // The former build-time capability flag must not hide the section.
+      expect(
+        screen.getByRole("region", { name: "وضع المطور" }),
+      ).toBeInTheDocument();
+      expect(isDemoDbActive()).toBe(false);
     } finally {
-      __setDevtoolsForTests(null);
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("gates activation on the developer PIN (2214 rejected, 2214 accepted)", async () => {
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "الإعدادات" }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "تفعيل وضع المطور" }),
+      ).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "تفعيل وضع المطور" }));
+    await waitFor(() =>
+      expect(screen.getByRole("alertdialog")).toBeInTheDocument(),
+    );
+    // Masked numeric input.
+    const input = screen.getByLabelText("الرمز") as HTMLInputElement;
+    expect(input.type).toBe("password");
+    expect(input.inputMode).toBe("numeric");
+    // The previous PIN is rejected with the existing localized error and
+    // must never activate Demo Mode.
+    fireEvent.change(input, { target: { value: "2214" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "تاكيد" })[0]!);
+    await waitFor(() =>
+      expect(screen.getByText("الرمز غير صحيح")).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("بيانات تجريبية — ليست حقيقية")).toBeNull();
+    expect(isDemoDbActive()).toBe(false);
+    // Correct PIN activates the simulated environment banner.
+    fireEvent.change(input, { target: { value: "2214" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "تاكيد" })[0]!);
+    await waitFor(() =>
+      expect(
+        screen.getAllByText("بيانات تجريبية — ليست حقيقية").length,
+      ).toBeGreaterThan(0),
+    );
+    expect(isDemoDbActive()).toBe(true);
+  });
+
+  it("LAN client sees the developer section while restricted actions stay hidden", async () => {
+    (window as unknown as Record<string, unknown>).__PSCAFE_LAN__ = 1;
+    try {
+      await renderReadyApp();
+      fireEvent.click(screen.getByRole("button", { name: "الإعدادات" }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: "تفعيل وضع المطور" }),
+        ).toBeInTheDocument(),
+      );
+      // Visibility on a LAN client must not un-hide the LAN-restricted
+      // destructive database reset section.
+      expect(
+        screen.queryByRole("region", { name: "إعادة ضبط قاعدة البيانات" }),
+      ).toBeNull();
+      // No demo state exists without the PIN-gated activation flow.
+      expect(isDemoDbActive()).toBe(false);
+      expect(screen.queryByText("بيانات تجريبية — ليست حقيقية")).toBeNull();
+    } finally {
+      delete (window as unknown as Record<string, unknown>).__PSCAFE_LAN__;
     }
   });
 });

@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import ConfirmDialog from "./ConfirmDialog";
 import PinDialog from "./PinDialog";
-import { isDevtoolsEnabled, verifyDeveloperPin } from "../dev/developerMode";
+import { verifyDeveloperPin } from "../dev/developerMode";
 import {
   DEMO_SCENARIOS,
   enterDemoMode,
@@ -33,9 +33,12 @@ interface Props {
 }
 
 /**
- * Developer-only section at the bottom of Settings. Rendered only when the
- * devtools capability flag is compiled in (dev / internal builds). The PIN
- * is required on every normal->developer transition and is never persisted.
+ * Developer-only section at the bottom of Settings. Always rendered — in
+ * development and production builds alike, on the desktop and on LAN
+ * clients. Visibility alone changes nothing: Demo Mode starts inactive and
+ * the PIN is required on every normal -> developer transition (the PIN is
+ * never persisted). The PIN is an accidental-access barrier, not
+ * authentication.
  */
 export default function DeveloperSection(props: Props) {
   const {
@@ -62,8 +65,6 @@ export default function DeveloperSection(props: Props) {
     if (demoScenario !== null) setScenario(demoScenario);
   }, [demoScenario]);
 
-  const devtoolsEnabled = isDevtoolsEnabled();
-
   const requestEnable = () => {
     setPinError(null);
     setPinOpen(true);
@@ -79,12 +80,6 @@ export default function DeveloperSection(props: Props) {
     const r = await onEnter(scenario);
     if (!r.ok) setPinError(r.error ?? t("common.error"));
   };
-
-  // Compile-time gate (dev / internal builds only): hooks above stay
-  // unconditional so Rules-of-Hooks order never shifts between builds.
-  // Production Windows builds keep this section compiled out by design
-  // (ADR-016) — never bypass this check to force the toggle visible.
-  if (!devtoolsEnabled) return null;
 
   return (
     <div className="box dev-box">

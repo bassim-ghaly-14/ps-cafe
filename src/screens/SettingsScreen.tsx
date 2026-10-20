@@ -354,24 +354,25 @@ export default function SettingsScreen(props: Props) {
           />
         </section>
       )}
-      {/* Section 5 — Developer Mode: always the last Settings section, under
-          the same dev-only visibility gate as before. */}
-      {!isLanClient() && (
-        <section
-          className="settings-section"
-          aria-label={t("settings.devSectionTitle")}
-        >
-          <DeveloperSection
-            demoActive={demoActive}
-            demoScenario={demoScenario}
-            demoError={demoError}
-            busy={busy}
-            onEnter={onDemoEnter}
-            onReseed={onDemoReseed}
-            onExit={onDemoExit}
-          />
-        </section>
-      )}
+      {/* Section 5 — Developer Mode: always the last Settings section and
+          always visible (development + production builds, desktop + LAN
+          client). Visibility alone grants nothing: activation stays behind
+          the Developer PIN, and Demo Mode runs on an isolated local DB that
+          never reaches the LAN gateway or the production database. */}
+      <section
+        className="settings-section"
+        aria-label={t("settings.devSectionTitle")}
+      >
+        <DeveloperSection
+          demoActive={demoActive}
+          demoScenario={demoScenario}
+          demoError={demoError}
+          busy={busy}
+          onEnter={onDemoEnter}
+          onReseed={onDemoReseed}
+          onExit={onDemoExit}
+        />
+      </section>
     </>
   );
 

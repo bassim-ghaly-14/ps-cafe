@@ -46,6 +46,18 @@ describe("database reset safety gate", () => {
   it("passes on a clean idle database", async () => {
     expect(await checkDatabaseResetSafety(() => false)).toBeNull();
   });
+
+  it("blocks on a LAN client even though Settings shows the developer section", async () => {
+    // Developer Mode visibility on a LAN client must never weaken the
+    // LAN-restricted destructive reset path.
+    (window as unknown as Record<string, unknown>).__PSCAFE_LAN__ = 1;
+    try {
+      const blocked = await checkDatabaseResetSafety(() => false);
+      expect(blocked?.reason).toBe("LAN_CLIENT");
+    } finally {
+      delete (window as unknown as Record<string, unknown>).__PSCAFE_LAN__;
+    }
+  });
 });
 
 describe("database reset", () => {
