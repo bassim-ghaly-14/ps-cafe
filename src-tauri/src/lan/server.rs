@@ -13,12 +13,12 @@
 use crate::lan::api::{GatewayDb, Param};
 use crate::lan::auth;
 use crate::lan::state::LanState;
-use axum::Router;
 use axum::extract::{Request, State};
-use axum::http::{HeaderMap, StatusCode, header};
+use axum::http::{header, HeaderMap, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
+use axum::Router;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -36,9 +36,13 @@ pub struct AppState {
     pub expected_host_suffix: String,
 }
 
+/// The asset-lookup callback behind [`AssetGetter`]: maps a request path
+/// (e.g. `/index.html`) to its raw bytes, or `None` when unknown.
+pub type AssetLookup = Arc<dyn Fn(&str) -> Option<Vec<u8>> + Send + Sync>;
+
 /// Cloneable asset reader (avoids Debug issues with closures).
 #[derive(Clone)]
-pub struct AssetGetter(pub Arc<dyn Fn(&str) -> Option<Vec<u8>> + Send + Sync>);
+pub struct AssetGetter(pub AssetLookup);
 
 impl std::fmt::Debug for AssetGetter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -57,6 +61,11 @@ fn err(status: StatusCode, code: &str) -> Response {
     let body = serde_json::json!({ "ok": false, "error": code }).to_string();
     (status, [(header::CONTENT_TYPE, "application/json")], body).into_response()
 }
+
+/// Small internal error shared by the auth/db helpers: `(status, code)`.
+/// Keeping it tiny avoids `clippy::result_large_err`; [`err`] builds the
+/// actual HTTP response at the handler boundary.
+type ApiError = (StatusCode, &'static str);
 
 /// Strict Host validation: the request must target the advertised
 /// address:port (phones) or loopback (desktop self-check). Anything else
@@ -83,7 +92,7 @@ async fn host_guard(State(st): State<AppState>, req: Request, next: Next) -> Res
 /// Bearer-token check for `/api/select` and `/api/execute`.
 /// (`/api/health` and static assets stay public: reachability alone
 /// grants nothing — health returns no data and assets are the app shell.)
-fn require_auth(st: &AppState, headers: &HeaderMap) -> Result<(), Response> {
+fn require_auth(st: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
     let bearer = auth::bearer_from_header(
         headers
             .get(header::AUTHORIZATION)
@@ -101,12 +110,14 @@ fn require_auth(st: &AppState, headers: &HeaderMap) -> Result<(), Response> {
     if valid {
         Ok(())
     } else {
-        Err(err(StatusCode::UNAUTHORIZED, "UNAUTHORIZED"))
+        Err((StatusCode::UNAUTHORIZED, "UNAUTHORIZED"))
     }
 }
 
-fn db_or_503(st: &AppState) -> Result<GatewayDb, Response> {
-    st.db.clone().ok_or_else(|| err(StatusCode::SERVICE_UNAVAILABLE, "DB_NOT_READY"))
+fn db_or_503(st: &AppState) -> Result<GatewayDb, ApiError> {
+    st.db
+        .clone()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "DB_NOT_READY"))
 }
 
 /// POST /api/select — validated read-only SQL, returns rows.
@@ -115,8 +126,8 @@ async fn handle_select(
     headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> Response {
-    if let Err(r) = require_auth(&st, &headers) {
-        return r;
+    if let Err(e) = require_auth(&st, &headers) {
+        return err(e.0, e.1);
     }
     let req: SqlRequest = match serde_json::from_slice(&body) {
         Ok(r) => r,
@@ -127,7 +138,7 @@ async fn handle_select(
     }
     let db = match db_or_503(&st) {
         Ok(d) => d,
-        Err(r) => return r,
+        Err(e) => return err(e.0, e.1),
     };
     match tokio::task::spawn_blocking(move || db.select(&req.sql, &req.params)).await {
         Ok(Ok(rows)) => json_ok(serde_json::json!({ "rows": rows })),
@@ -142,10 +153,15 @@ async fn handle_execute(
     headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> Response {
-    if let Err(r) = require_auth(&st, &headers) {
-        return r;
+    if let Err(e) = require_auth(&st, &headers) {
+        return err(e.0, e.1);
     }
-    let allowed = st.lan.inner.lock().map(|g| g.prefs.allow_writes).unwrap_or(false);
+    let allowed = st
+        .lan
+        .inner
+        .lock()
+        .map(|g| g.prefs.allow_writes)
+        .unwrap_or(false);
     if !allowed {
         return err(StatusCode::FORBIDDEN, "WRITES_DISABLED");
     }
@@ -158,7 +174,7 @@ async fn handle_execute(
     }
     let db = match db_or_503(&st) {
         Ok(d) => d,
-        Err(r) => return r,
+        Err(e) => return err(e.0, e.1),
     };
     match tokio::task::spawn_blocking(move || db.execute(&req.sql, &req.params)).await {
         Ok(Ok(affected)) => json_ok(serde_json::json!({ "affected": affected })),
@@ -175,11 +191,13 @@ fn json_ok(v: serde_json::Value) -> Response {
             obj.insert(k, val);
         }
     }
-    (StatusCode::OK, [(header::CONTENT_TYPE, "application/json")], serde_json::Value::Object(obj).to_string())
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/json")],
+        serde_json::Value::Object(obj).to_string(),
+    )
         .into_response()
 }
-
-
 
 /// GET /api/health — unauthenticated liveness (no data).
 async fn handle_health() -> Response {
@@ -260,7 +278,9 @@ pub fn router(state: AppState) -> Router {
         .route("/", get(handle_asset))
         .route("/{*path}", get(handle_asset))
         .layer(middleware::from_fn_with_state(state.clone(), host_guard))
-        .layer(tower_http::limit::RequestBodyLimitLayer::new(MAX_BODY_BYTES))
+        .layer(tower_http::limit::RequestBodyLimitLayer::new(
+            MAX_BODY_BYTES,
+        ))
         .layer(tower_http::timeout::TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,
             Duration::from_secs(25),
@@ -286,4 +306,118 @@ pub async fn serve(
         })
         .await
         .map_err(|e| format!("serve: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::{to_bytes, Bytes};
+    use axum::http::HeaderValue;
+
+    /// App state with a freshly issued valid pairing token, returned
+    /// alongside so tests can exercise authenticated call paths.
+    fn state_and_token(db: Option<GatewayDb>) -> (AppState, String) {
+        let lan = LanState::new();
+        let token = lan
+            .inner
+            .lock()
+            .expect("lan lock")
+            .tokens
+            .issue("test".into())
+            .token;
+        let st = AppState {
+            lan,
+            db,
+            asset_get: AssetGetter(Arc::new(|path| {
+                (path == "/index.html").then(|| b"<html></html>".to_vec())
+            })),
+            expected_host_suffix: "127.0.0.1:7741".into(),
+        };
+        (st, token)
+    }
+
+    fn bearer(token: &str) -> HeaderMap {
+        let mut h = HeaderMap::new();
+        h.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {token}")).expect("header value"),
+        );
+        h
+    }
+
+    async fn body_json(r: Response) -> serde_json::Value {
+        let bytes = to_bytes(r.into_body(), usize::MAX).await.expect("body");
+        serde_json::from_slice(&bytes).expect("json body")
+    }
+
+    #[tokio::test]
+    async fn select_without_auth_is_401_json() {
+        let (st, _token) = state_and_token(None);
+        let resp = handle_select(
+            State(st),
+            HeaderMap::new(),
+            Bytes::from_static(br#"{"sql":"SELECT 1"}"#),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            resp.headers()
+                .get(header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok()),
+            Some("application/json")
+        );
+        assert_eq!(
+            body_json(resp).await,
+            serde_json::json!({ "ok": false, "error": "UNAUTHORIZED" })
+        );
+    }
+
+    #[tokio::test]
+    async fn select_with_token_without_db_is_503_json() {
+        let (st, token) = state_and_token(None);
+        let resp = handle_select(
+            State(st),
+            bearer(&token),
+            Bytes::from_static(br#"{"sql":"SELECT 1"}"#),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            body_json(resp).await,
+            serde_json::json!({ "ok": false, "error": "DB_NOT_READY" })
+        );
+    }
+
+    #[tokio::test]
+    async fn select_with_token_and_db_returns_rows() {
+        let path =
+            std::env::temp_dir().join(format!("ps-cafe-server-test-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let db = GatewayDb::open(&path).expect("open db");
+        let (st, token) = state_and_token(Some(db));
+        let resp = handle_select(
+            State(st),
+            bearer(&token),
+            Bytes::from_static(br#"{"sql":"SELECT 1 AS n"}"#),
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let v = body_json(resp).await;
+        assert_eq!(v["ok"], serde_json::json!(true));
+        assert_eq!(v["rows"][0]["n"], serde_json::json!(1));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    }
+
+    #[test]
+    fn asset_getter_keeps_callback_contract() {
+        let get = AssetGetter(Arc::new(|path: &str| {
+            (path == "/index.html").then(|| b"<html></html>".to_vec())
+        }));
+        assert_eq!((get.0)("/index.html"), Some(b"<html></html>".to_vec()));
+        assert_eq!((get.0)("/missing"), None);
+        let cloned = get.clone();
+        assert_eq!((cloned.0)("/index.html"), Some(b"<html></html>".to_vec()));
+    }
 }

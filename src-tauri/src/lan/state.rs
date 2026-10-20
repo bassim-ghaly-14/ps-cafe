@@ -54,7 +54,7 @@ pub struct LanState {
     pub inner: Arc<Mutex<LanInner>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct LanInner {
     pub prefs: LanPrefs,
     pub tokens: TokenStore,
@@ -62,19 +62,6 @@ pub struct LanInner {
     pub address: Option<LanInterface>,
     pub candidates: Vec<LanInterface>,
     pub error: Option<String>,
-}
-
-impl Default for LanInner {
-    fn default() -> Self {
-        Self {
-            prefs: LanPrefs::default(),
-            tokens: TokenStore::default(),
-            running: false,
-            address: None,
-            candidates: Vec::new(),
-            error: None,
-        }
-    }
 }
 
 impl LanState {
@@ -108,5 +95,25 @@ impl LanState {
 impl Default for LanState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lan_inner_default_preserves_field_values() {
+        let d = LanInner::default();
+        // prefs keep the manual LanPrefs defaults (derive calls them too).
+        assert!(!d.prefs.enabled);
+        assert!(d.prefs.allow_writes);
+        assert_eq!(d.prefs.port, crate::lan::server::DEFAULT_PORT);
+        assert_eq!(d.prefs.pinned_address, "");
+        assert_eq!(d.tokens.count(), 0);
+        assert!(!d.running);
+        assert!(d.address.is_none());
+        assert!(d.candidates.is_empty());
+        assert!(d.error.is_none());
     }
 }
