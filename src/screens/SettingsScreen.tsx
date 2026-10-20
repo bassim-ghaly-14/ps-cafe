@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Eye,
@@ -84,7 +84,21 @@ export default function SettingsScreen(props: Props) {
     [],
   );
 
+  // Same keyboard contract as the app's other overlays (PinDialog,
+  // DatabaseResetSection): Escape dismisses the edit dialog without saving.
+  useEffect(() => {
+    if (editing === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setEditing(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editing]);
+
   const startEdit = (s: Station | null) => {
+    // The notice renders inside the dialog while it is open, so drop any
+    // stale message left over from a previous action before opening it.
+    setNotice(null);
     if (s === null) {
       setEditing("new");
       setName("");
@@ -156,23 +170,56 @@ export default function SettingsScreen(props: Props) {
     setConfirmOff(s);
   };
 
+  // Status feedback lives at the top of the page normally, but moves inside
+  // the edit dialog while it is open so save/validation errors stay readable
+  // above the overlay. Rendered in exactly one place to avoid duplicates.
+  const noticeEl = notice ? (
+    <p
+      className={notice.kind === "ok" ? "notice ok" : "notice err"}
+      role="status"
+    >
+      {notice.text}
+    </p>
+  ) : null;
+
   const body = (
     <>
-      <section className="settings-section" aria-label={t("nav.settings")}>
-        {notice && (
-          <p
-            className={notice.kind === "ok" ? "notice ok" : "notice err"}
-            role="status"
-          >
-            {notice.text}
-          </p>
-        )}
+      {/* Section 1 — General settings. */}
+      <section
+        className="settings-section"
+        aria-label={t("settings.generalTitle")}
+      >
+        {editing === null && noticeEl}
         <div className="box" aria-labelledby="settings-general-title">
           <h3 id="settings-general-title">{t("settings.generalTitle")}</h3>
           <p className="sub">{t("settings.generalNote")}</p>
         </div>
-        <div className="box">
-          <h3>{t("settings.cardsTitle")}</h3>
+      </section>
+      {/* Section 2 — Device management: header keeps the heading, the device
+          count and the add-device action together, then the device rows and
+          the never-delete-history safety note. */}
+      <section
+        className="settings-section"
+        aria-label={t("settings.cardsTitle")}
+      >
+        <div className="box" aria-labelledby="settings-devices-title">
+          <div className="settings-head">
+            <div className="settings-head-titles">
+              <h3 id="settings-devices-title">{t("settings.cardsTitle")}</h3>
+              <span className="sub">
+                {t("settings.deviceCount", { count: stations.length })}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="btn ghost"
+              disabled={busy}
+              onClick={() => startEdit(null)}
+            >
+              <Plus size={16} aria-hidden />
+              <span>{t("settings.add")}</span>
+            </button>
+          </div>
           {/* Column labels mirror the station row cells exactly:
             swatch | name | active status | actions. */}
           <div className="settings-station-row head">
@@ -281,31 +328,34 @@ export default function SettingsScreen(props: Props) {
               </span>
             </div>
           ))}
-          <div className="row2">
-            <button
-              type="button"
-              className="btn ghost"
-              disabled={busy}
-              onClick={() => startEdit(null)}
-            >
-              <Plus size={16} aria-hidden />
-              <span>{t("settings.add")}</span>
-            </button>
-            <span className="sub">
-              {t("settings.deviceCount", { count: stations.length })}
-            </span>
-          </div>
-          <p className="sub" style={{ marginTop: 8 }}>
-            {t("settings.note")}
-          </p>
+          <p className="sub settings-note">{t("settings.note")}</p>
         </div>
       </section>
+      {/* Section 3 — QR / local-network pairing, below device management. */}
       <section
         className="settings-section"
         aria-label={t("settings.lanSectionTitle")}
       >
         <LanPanel setNotice={setNotice} onStatusChange={onLanStatus} />
       </section>
+      {/* Section 4 — Database reset: destructive, secondary admin action,
+          kept apart from the normal configuration options above it. */}
+      {!isLanClient() && (
+        <section
+          className="settings-section settings-danger"
+          aria-label={t("settings.resetSectionTitle")}
+        >
+          <DatabaseResetSection
+            busy={busy}
+            setNotice={setNotice}
+            lanRunning={lanRunning}
+            demoActive={demoActive}
+            onResetDone={onResetDone}
+          />
+        </section>
+      )}
+      {/* Section 5 — Developer Mode: always the last Settings section, under
+          the same dev-only visibility gate as before. */}
       {!isLanClient() && (
         <section
           className="settings-section"
@@ -322,20 +372,6 @@ export default function SettingsScreen(props: Props) {
           />
         </section>
       )}
-      {!isLanClient() && (
-        <section
-          className="settings-section"
-          aria-label={t("settings.resetSectionTitle")}
-        >
-          <DatabaseResetSection
-            busy={busy}
-            setNotice={setNotice}
-            lanRunning={lanRunning}
-            demoActive={demoActive}
-            onResetDone={onResetDone}
-          />
-        </section>
-      )}
     </>
   );
 
@@ -344,62 +380,85 @@ export default function SettingsScreen(props: Props) {
   return (
     <>
       {body}
+      {/* Device add/edit dialog. Rendered through the app's modal layering
+          (.modal-backdrop > .modal, fixed overlay above every Settings
+          section) instead of inline flow, so it never sits at the bottom of
+          the page or pushes content down. Backdrop click and Escape cancel,
+          matching the other dialogs in the app. */}
       {editing !== null && (
-        <div className="box settings-edit-box">
-          <h3>{editing === "new" ? t("settings.add") : t("settings.edit")}</h3>
-          <label className="fld" htmlFor="station-name">
-            <span>{t("settings.nameLabel")}</span>
-            <input
-              id="station-name"
-              type="text"
-              value={name}
-              maxLength={60}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </label>
-          <label className="fld" htmlFor="station-rate">
-            <span>{t("settings.rateLabel")}</span>
-            <input
-              id="station-rate"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              max={10000}
-              step="0.5"
-              value={rate}
-              onChange={(e) => setRate(e.target.value)}
-              aria-describedby="rate-help"
-              dir="ltr"
-            />
-            <small id="rate-help" className="sub">
-              {t("settings.rateHelp")}
-            </small>
-          </label>
-          <label className="fld" htmlFor="station-color">
-            <span>{t("settings.colorLabel")}</span>
-            <input
-              id="station-color"
-              type="color"
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-            />
-          </label>
-          <div className="row2">
-            <button
-              type="button"
-              className="btn"
-              disabled={busy}
-              onClick={submit}
-            >
-              {t("settings.save")}
-            </button>
-            <button
-              type="button"
-              className="btn ghost"
-              onClick={() => setEditing(null)}
-            >
-              {t("settings.cancel")}
-            </button>
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setEditing(null)}
+        >
+          <div
+            className="modal settings-edit-box"
+            role="dialog"
+            aria-modal="true"
+            aria-label={
+              editing === "new" ? t("settings.add") : t("settings.edit")
+            }
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3>
+              {editing === "new" ? t("settings.add") : t("settings.edit")}
+            </h3>
+            {noticeEl}
+            <label className="fld" htmlFor="station-name">
+              <span>{t("settings.nameLabel")}</span>
+              <input
+                id="station-name"
+                type="text"
+                value={name}
+                maxLength={60}
+                autoFocus
+                onChange={(e) => setName(e.target.value)}
+              />
+            </label>
+            <label className="fld" htmlFor="station-rate">
+              <span>{t("settings.rateLabel")}</span>
+              <input
+                id="station-rate"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                max={10000}
+                step="0.5"
+                value={rate}
+                onChange={(e) => setRate(e.target.value)}
+                aria-describedby="rate-help"
+                dir="ltr"
+              />
+              <small id="rate-help" className="sub">
+                {t("settings.rateHelp")}
+              </small>
+            </label>
+            <label className="fld" htmlFor="station-color">
+              <span>{t("settings.colorLabel")}</span>
+              <input
+                id="station-color"
+                type="color"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+              />
+            </label>
+            <div className="row2">
+              <button
+                type="button"
+                className="btn"
+                disabled={busy}
+                onClick={submit}
+              >
+                {t("settings.save")}
+              </button>
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={() => setEditing(null)}
+              >
+                {t("settings.cancel")}
+              </button>
+            </div>
           </div>
         </div>
       )}

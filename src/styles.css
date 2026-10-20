@@ -964,6 +964,8 @@ th[aria-sort="none"] .sort-header:hover {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  /* Consistent rhythm between the major Settings sections. */
+  margin-bottom: 20px;
 }
 
 .settings-section .box {
@@ -981,6 +983,41 @@ th[aria-sort="none"] .sort-header:hover {
   color: var(--mute);
   line-height: 1.45;
   margin-bottom: 12px;
+}
+
+/* Section header: heading + device count stay together on one side, the
+   section's primary action (add device) aligns opposite and wraps below on
+   narrow screens. */
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  margin-bottom: 14px;
+}
+
+.settings-head-titles {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-head h3,
+.settings-head .sub {
+  margin-bottom: 0;
+}
+
+/* Safety note directly under the device list. */
+.settings-note {
+  margin-top: 12px;
+}
+
+/* Destructive admin section keeps extra breathing room from the normal
+   configuration options above it (on top of the standard section gap). */
+.settings-danger {
+  margin-top: 8px;
 }
 
 .settings-station-row {
@@ -1052,6 +1089,14 @@ th[aria-sort="none"] .sort-header:hover {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* Rendered as a centered overlay (.modal-backdrop > .modal): keep it inside
+   the viewport and scroll its contents on short/small screens. */
+.modal.settings-edit-box {
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
 }
 
 .settings-edit-box .fld {
