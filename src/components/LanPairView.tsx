@@ -1,12 +1,7 @@
 import { useTranslation } from "react-i18next";
-import { Copy, QrCode } from "lucide-react";
+import { Copy, Eye, QrCode } from "lucide-react";
 import { useState } from "react";
-import {
-  lanRevokeAll,
-  lanSelectInterface,
-  lanSetEnabled,
-  lanSetWrites,
-} from "../lan/bridge";
+import { lanRevokeAll, lanSelectInterface, lanSetEnabled } from "../lan/bridge";
 import type { LanPairing, LanStatus } from "../lan/bridge";
 
 interface Props {
@@ -77,26 +72,13 @@ export default function LanPairView(props: Props) {
           />
           <span>{t("lan.enable")}</span>
         </label>
-        <label className="switch">
-          <input
-            type="checkbox"
-            checked={status?.allowWrites ?? true}
-            disabled={busy}
-            onChange={async (e) => {
-              setBusy(true);
-              try {
-                onStatus(await lanSetWrites(e.target.checked));
-              } catch (err) {
-                fail(err);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          />
-          <span>{t("lan.allowWrites")}</span>
-        </label>
       </div>
-      <p className="sub">{t("lan.writesHint")}</p>
+      {/* The gateway is permanently read-only: there is no write toggle to
+          offer, only a statement of the fact. */}
+      <p className="sub lan-readonly">
+        <Eye size={14} aria-hidden style={{ verticalAlign: "-2px" }} />{" "}
+        {t("lan.readOnlyNotice")}
+      </p>
 
       {status && status.candidates.length > 1 && (
         <label className="fld" htmlFor="lan-iface">

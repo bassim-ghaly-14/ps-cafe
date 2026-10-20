@@ -7,7 +7,9 @@ import type { LanPairing, LanStatus } from "../lan/bridge";
 const status: LanStatus = {
   running: true,
   enabled: true,
-  allowWrites: true,
+  // The gateway is permanently read-only: the status reports the fact so
+  // the panel can state it instead of offering a write toggle.
+  readOnly: true,
   address: "192.168.1.10",
   port: 7741,
   url: "http://192.168.1.10:7741",
@@ -97,5 +99,31 @@ describe("LanPairView copy-link button success state", () => {
     );
     expect(btn.classList.contains("copied")).toBe(false);
     expect(btn.classList.contains("ghost")).toBe(true);
+  });
+});
+
+describe("LanPairView read-only contract", () => {
+  beforeEach(async () => {
+    await readyPromise;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("states that the gateway is read-only", () => {
+    renderView();
+    expect(screen.getByText(/وضع العرض فقط/)).toBeInTheDocument();
+  });
+
+  it("offers no write toggle (the gateway is permanently read-only)", () => {
+    renderView();
+    // The old "allow writes from the phone" switch must be gone for good.
+    expect(screen.queryByText(/السماح للموبايل بالتشغيل والإيقاف/)).toBeNull();
+    // Only the enable switch remains, plus the QR / revoke actions.
+    expect(
+      screen.getByRole("checkbox", { name: /تشغيل الخادم المحلي/ }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("checkbox")).toHaveLength(1);
   });
 });

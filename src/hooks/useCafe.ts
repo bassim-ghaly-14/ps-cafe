@@ -3,6 +3,7 @@ import { getActiveDb } from "../db/client";
 import { canCloseDay } from "../domain/businessDay";
 import { parseHourlyRateInput } from "../domain/pricing";
 import { canStartSessionDetailed } from "../domain/rentalSession";
+import { isReadOnly } from "../mode/visitor";
 import * as dayRepo from "../repositories/businessDayRepo";
 import * as stationRepo from "../repositories/stationRepo";
 import * as sessionRepo from "../repositories/sessionRepo";
@@ -159,6 +160,7 @@ export function useCafeActions(refresh: () => Promise<void>): {
   ) => Promise<CafeResult>;
 } {
   const openBusinessDay = async (): Promise<CafeResult> => {
+    if (isReadOnly()) return { ok: false, messageKey: "common.readOnly" };
     try {
       const existing = await dayRepo.getOpenDay();
       if (existing) {
@@ -175,6 +177,7 @@ export function useCafeActions(refresh: () => Promise<void>): {
   };
 
   const closeBusinessDay = async (): Promise<CafeResult> => {
+    if (isReadOnly()) return { ok: false, messageKey: "common.readOnly" };
     const open = await dayRepo.getOpenDay();
     if (!open) {
       await refresh();
@@ -209,6 +212,7 @@ export function useCafeActions(refresh: () => Promise<void>): {
   };
 
   const startStation = async (stationId: number): Promise<CafeResult> => {
+    if (isReadOnly()) return { ok: false, messageKey: "common.readOnly" };
     const open = await dayRepo.getOpenDay();
     const station = await stationRepo.getStation(stationId);
     const existing = await sessionRepo.getActiveSession(stationId);
@@ -249,6 +253,7 @@ export function useCafeActions(refresh: () => Promise<void>): {
   };
 
   const stopStation = async (stationId: number): Promise<CafeResult> => {
+    if (isReadOnly()) return { ok: false, messageKey: "common.readOnly" };
     const active = await sessionRepo.getActiveSession(stationId);
     if (!active) return { ok: false, messageKey: "stations.noSession" };
     const station = await stationRepo.getStation(stationId);
@@ -279,6 +284,7 @@ export function useCafeActions(refresh: () => Promise<void>): {
     active: boolean,
     hourlyRateMinor: number | string,
   ): Promise<CafeResult> => {
+    if (isReadOnly()) return { ok: false, messageKey: "common.readOnly" };
     const trimmed = name.trim().replace(/\s+/g, " ");
     if (trimmed.length === 0)
       return { ok: false, messageKey: "settings.nameRequired" };

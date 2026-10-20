@@ -15,6 +15,7 @@ import {
   liveHMS,
 } from "../utils/format";
 import { getStation } from "../repositories/stationRepo";
+import { isReadOnly } from "../mode/visitor";
 import {
   aggregateForStation,
   getActiveSession,
@@ -187,7 +188,8 @@ export default function StationDetailsScreen(props: Props) {
   );
 
   const act = async () => {
-    if (busy) return;
+    // Visitor mode is read-only: never even attempt a mutation.
+    if (busy || isReadOnly()) return;
     setBusy(true);
     try {
       const r = running ? await onStop(station.id) : await onStart(station.id);
@@ -276,18 +278,20 @@ export default function StationDetailsScreen(props: Props) {
             </span>
           )}
         </div>
-        <div className="row2">
-          <button
-            type="button"
-            className={running ? "btn stop" : "btn"}
-            disabled={
-              busy || (!running && (openDay === null || !station.isActive))
-            }
-            onClick={act}
-          >
-            {running ? t("device.stop") : t("device.start")}
-          </button>
-        </div>
+        {!isReadOnly() && (
+          <div className="row2">
+            <button
+              type="button"
+              className={running ? "btn stop" : "btn"}
+              disabled={
+                busy || (!running && (openDay === null || !station.isActive))
+              }
+              onClick={act}
+            >
+              {running ? t("device.stop") : t("device.start")}
+            </button>
+          </div>
+        )}
       </div>
       <div className="grid stats">
         <div className="stat revenue">

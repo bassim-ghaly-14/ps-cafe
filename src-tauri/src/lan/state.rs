@@ -2,10 +2,14 @@
 //!
 //! All server configuration is explicit and desktop-controlled:
 //! - `enabled`: gateway on/off (Settings toggle, persisted to disk).
-//! - `allow_writes`: whether paired phones may run `execute` (start/stop
-//!   sessions, open/close days, station edits). Reads always work with a
-//!   valid token; writes additionally require this flag.
 //! - `port` / `active_address`: what is currently advertised.
+//!
+//! Visitor mode is absolute: the gateway has no write capability at all.
+//! Paired phones are read-only observers — they can read the shared
+//! database but can never mutate it. There is deliberately no
+//! `allow_writes` preference: a write toggle would be a LAN-reachable
+//! way to escalate privileges, so the capability was removed instead of
+//! being gated.
 
 use crate::lan::address::LanInterface;
 use crate::lan::auth::TokenStore;
@@ -15,7 +19,6 @@ use std::sync::{Arc, Mutex};
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct LanPrefs {
     pub enabled: bool,
-    pub allow_writes: bool,
     pub port: u16,
     /// Pinned interface address, or empty for automatic selection.
     pub pinned_address: String,
@@ -25,7 +28,6 @@ impl Default for LanPrefs {
     fn default() -> Self {
         Self {
             enabled: false,
-            allow_writes: true,
             port: crate::lan::server::DEFAULT_PORT,
             pinned_address: String::new(),
         }
@@ -38,7 +40,8 @@ impl Default for LanPrefs {
 pub struct LanStatus {
     pub running: bool,
     pub enabled: bool,
-    pub allow_writes: bool,
+    /// Always `true`: the gateway never exposes a write endpoint.
+    pub read_only: bool,
     pub address: Option<String>,
     pub port: u16,
     pub url: Option<String>,
@@ -80,7 +83,7 @@ impl LanState {
         LanStatus {
             running: g.running,
             enabled: g.prefs.enabled,
-            allow_writes: g.prefs.allow_writes,
+            read_only: true,
             address: g.address.as_ref().map(|a| a.address.clone()),
             port: g.prefs.port,
             url,
@@ -107,7 +110,6 @@ mod tests {
         let d = LanInner::default();
         // prefs keep the manual LanPrefs defaults (derive calls them too).
         assert!(!d.prefs.enabled);
-        assert!(d.prefs.allow_writes);
         assert_eq!(d.prefs.port, crate::lan::server::DEFAULT_PORT);
         assert_eq!(d.prefs.pinned_address, "");
         assert_eq!(d.tokens.count(), 0);
@@ -115,5 +117,12 @@ mod tests {
         assert!(d.address.is_none());
         assert!(d.candidates.is_empty());
         assert!(d.error.is_none());
+    }
+
+    #[test]
+    fn status_is_always_read_only() {
+        let state = LanState::new();
+        let s = state.status();
+        assert!(s.read_only, "the LAN gateway is always read-only");
     }
 }

@@ -7,10 +7,13 @@
 //! 421 — this blunts DNS-rebinding attacks.
 //!
 //! Public (unauthenticated): `/`, static assets, `/api/health`.
-//! Authenticated (bearer token): `/api/select`, `/api/execute`.
-//! `execute` additionally requires `allow_writes` on the desktop.
+//! Authenticated (bearer token): `/api/select`.
+//!
+//! The gateway is a strictly read-only visitor surface. `/api/execute`
+//! always answers `403 READ_ONLY_MODE`; the desktop app performs all
+//! writes itself through Tauri, never through this server.
 
-use crate::lan::api::{GatewayDb, Param};
+use crate::lan::api::{DbHandle, GatewayDb, Param};
 use crate::lan::auth;
 use crate::lan::state::LanState;
 use axum::extract::{Request, State};
@@ -30,8 +33,10 @@ pub const MAX_BODY_BYTES: usize = 256 * 1024;
 #[derive(Debug, Clone)]
 pub struct AppState {
     pub lan: LanState,
-    /// `None` until the database file has been located/opened.
-    pub db: Option<GatewayDb>,
+    /// Lazily-resolved read-only handle to the shared database. `None` until
+    /// the file exists; the handle re-resolves on every request while it is
+    /// missing, so a database created later by the desktop is picked up.
+    pub db: DbHandle,
     pub asset_get: AssetGetter,
     pub expected_host_suffix: String,
 }
@@ -116,7 +121,7 @@ fn require_auth(st: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
 
 fn db_or_503(st: &AppState) -> Result<GatewayDb, ApiError> {
     st.db
-        .clone()
+        .get()
         .ok_or((StatusCode::SERVICE_UNAVAILABLE, "DB_NOT_READY"))
 }
 
@@ -133,7 +138,7 @@ async fn handle_select(
         Ok(r) => r,
         Err(_) => return err(StatusCode::BAD_REQUEST, "BAD_JSON"),
     };
-    if let Err(code) = crate::lan::sql::validate(&req.sql, false) {
+    if let Err(code) = crate::lan::sql::validate(&req.sql) {
         return err(StatusCode::FORBIDDEN, &format!("SQL_REJECTED:{code}"));
     }
     let db = match db_or_503(&st) {
@@ -147,40 +152,14 @@ async fn handle_select(
     }
 }
 
-/// POST /api/execute — validated writes; requires `allow_writes`.
-async fn handle_execute(
-    State(st): State<AppState>,
-    headers: HeaderMap,
-    body: axum::body::Bytes,
-) -> Response {
-    if let Err(e) = require_auth(&st, &headers) {
-        return err(e.0, e.1);
-    }
-    let allowed = st
-        .lan
-        .inner
-        .lock()
-        .map(|g| g.prefs.allow_writes)
-        .unwrap_or(false);
-    if !allowed {
-        return err(StatusCode::FORBIDDEN, "WRITES_DISABLED");
-    }
-    let req: SqlRequest = match serde_json::from_slice(&body) {
-        Ok(r) => r,
-        Err(_) => return err(StatusCode::BAD_REQUEST, "BAD_JSON"),
-    };
-    if let Err(code) = crate::lan::sql::validate(&req.sql, true) {
-        return err(StatusCode::FORBIDDEN, &format!("SQL_REJECTED:{code}"));
-    }
-    let db = match db_or_503(&st) {
-        Ok(d) => d,
-        Err(e) => return err(e.0, e.1),
-    };
-    match tokio::task::spawn_blocking(move || db.execute(&req.sql, &req.params)).await {
-        Ok(Ok(affected)) => json_ok(serde_json::json!({ "affected": affected })),
-        Ok(Err(e)) => err(StatusCode::UNPROCESSABLE_ENTITY, &e),
-        Err(_) => err(StatusCode::INTERNAL_SERVER_ERROR, "DB_TASK_FAILED"),
-    }
+/// POST /api/execute — permanently disabled.
+///
+/// The gateway is a read-only visitor surface: there is no code path,
+/// preference, or API that can re-enable writes for LAN clients. The
+/// route is kept only so that a stale client receives an explicit
+/// `READ_ONLY_MODE` error instead of a confusing 404.
+async fn handle_execute() -> Response {
+    err(StatusCode::FORBIDDEN, "READ_ONLY_MODE")
 }
 
 fn json_ok(v: serde_json::Value) -> Response {
@@ -313,6 +292,7 @@ mod tests {
     use super::*;
     use axum::body::{to_bytes, Bytes};
     use axum::http::HeaderValue;
+    use rusqlite::Connection;
 
     /// App state with a freshly issued valid pairing token, returned
     /// alongside so tests can exercise authenticated call paths.
@@ -325,9 +305,16 @@ mod tests {
             .tokens
             .issue("test".into())
             .token;
+        // When no connection is supplied the handle must not be able to
+        // resolve one either, so point it at a path that does not exist.
+        let path = std::env::temp_dir().join(format!(
+            "ps-cafe-server-missing-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
         let st = AppState {
             lan,
-            db,
+            db: DbHandle::new(path, db),
             asset_get: AssetGetter(Arc::new(|path| {
                 (path == "/index.html").then(|| b"<html></html>".to_vec())
             })),
@@ -393,6 +380,13 @@ mod tests {
         let path =
             std::env::temp_dir().join(format!("ps-cafe-server-test-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
+        // The gateway opens the database read-only, so the file (and its
+        // schema) must already exist.
+        {
+            let seed = Connection::open(&path).expect("seed db");
+            seed.execute_batch("CREATE TABLE IF NOT EXISTS t(n INTEGER);")
+                .expect("schema");
+        }
         let db = GatewayDb::open(&path).expect("open db");
         let (st, token) = state_and_token(Some(db));
         let resp = handle_select(
@@ -408,6 +402,42 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
         let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    }
+
+    #[tokio::test]
+    async fn execute_is_always_forbidden_read_only_mode() {
+        // The write endpoint is permanently closed: no token, no
+        // preference, no code path can turn it on.
+        let resp = handle_execute().await;
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        assert_eq!(
+            body_json(resp).await,
+            serde_json::json!({ "ok": false, "error": "READ_ONLY_MODE" })
+        );
+    }
+
+    #[tokio::test]
+    async fn select_rejects_write_statements() {
+        let path =
+            std::env::temp_dir().join(format!("ps-cafe-server-ro-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        {
+            let seed = Connection::open(&path).expect("seed db");
+            seed.execute_batch("CREATE TABLE IF NOT EXISTS t(n INTEGER);")
+                .expect("schema");
+        }
+        let db = GatewayDb::open(&path).expect("open db");
+        let (st, token) = state_and_token(Some(db));
+        for sql in [
+            r#"{"sql":"INSERT INTO t(n) VALUES (1)"}"#,
+            r#"{"sql":"UPDATE t SET n = 2"}"#,
+            r#"{"sql":"DELETE FROM t"}"#,
+            r#"{"sql":"PRAGMA journal_mode=WAL"}"#,
+        ] {
+            let resp = handle_select(State(st.clone()), bearer(&token), Bytes::from_static(sql.as_bytes())).await;
+            assert_eq!(resp.status(), StatusCode::FORBIDDEN, "{sql}");
+        }
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

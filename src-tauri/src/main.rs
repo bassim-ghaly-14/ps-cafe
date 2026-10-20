@@ -1,7 +1,7 @@
 mod lan;
 
 use lan::address::{base_url, list_candidates, preferred};
-use lan::api::GatewayDb;
+use lan::api::{DbHandle, GatewayDb};
 use lan::server::{AppState, AssetGetter, DEFAULT_PORT};
 use lan::state::{LanPrefs, LanState, LanStatus};
 use std::sync::Arc;
@@ -112,13 +112,24 @@ async fn start_gateway<R: Runtime>(app: &AppHandle<R>, state: &LanState) -> Resu
     if let Some(parent) = db_path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("mkdir db dir: {e}"))?;
     }
-    let db = GatewayDb::open(&db_path)?;
+    // The gateway opens the database read-only, so the file must already
+    // exist. On a fresh install the desktop may not have created it yet;
+    // start without a database rather than refusing to serve. The handle
+    // is lazy: it re-resolves on every request while the file is missing,
+    // so the gateway starts serving data as soon as the desktop creates it.
+    let db = match GatewayDb::open(&db_path) {
+        Ok(db) => Some(db),
+        Err(e) => {
+            eprintln!("lan gateway: database not readable yet ({e}); serving without data");
+            None
+        }
+    };
 
     let app_clone = app.clone();
     let asset_get = AssetGetter(Arc::new(move |path| embedded_asset(&app_clone, path)));
     let app_state = AppState {
         lan: state.clone(),
-        db: Some(db),
+        db: DbHandle::new(db_path, db),
         asset_get,
         expected_host_suffix: format!("{}:{}", addr.address, prefs.port),
     };
@@ -199,29 +210,6 @@ async fn lan_set_enabled(
 }
 
 #[tauri::command]
-async fn lan_set_writes(
-    app: AppHandle<tauri::Wry>,
-    state: tauri::State<'_, LanState>,
-    allow: bool,
-) -> Result<LanStatus, String> {
-    {
-        let mut g = state.inner.lock().map_err(|_| "lan state lock".to_string())?;
-        g.prefs.allow_writes = allow;
-        let prefs = g.prefs.clone();
-        drop(g);
-        save_prefs(&app, &prefs);
-    }
-    // Disabling writes revokes existing tokens: a phone paired during a
-    // permissive window cannot keep acting after the owner locks it down.
-    if !allow {
-        if let Ok(mut g) = state.inner.lock() {
-            g.tokens.revoke_all();
-        }
-    }
-    Ok(state.status())
-}
-
-#[tauri::command]
 async fn lan_refresh(
     app: AppHandle<tauri::Wry>,
     state: tauri::State<'_, LanState>,
@@ -287,7 +275,6 @@ fn main() {
             lan_status,
             lan_pair,
             lan_set_enabled,
-            lan_set_writes,
             lan_refresh,
             lan_select_interface,
             lan_revoke_all,

@@ -352,18 +352,23 @@ describe("developer mode availability", () => {
     expect(isDemoDbActive()).toBe(true);
   });
 
-  it("LAN client sees the developer section while restricted actions stay hidden", async () => {
+  it("LAN visitor sees no developer section and no restricted actions", async () => {
     (window as unknown as Record<string, unknown>).__PSCAFE_LAN__ = 1;
     try {
       await renderReadyApp();
       fireEvent.click(screen.getByRole("button", { name: "الإعدادات" }));
       await waitFor(() =>
         expect(
-          screen.getByRole("button", { name: "تفعيل وضع المطور" }),
+          screen.getByRole("region", { name: "كروت الأجهزة" }),
         ).toBeInTheDocument(),
       );
-      // Visibility on a LAN client must not un-hide the LAN-restricted
-      // destructive database reset section.
+      // A visitor is permanently read-only: the Developer Mode section
+      // (which starts a local writable demo database) is not offered.
+      expect(
+        screen.queryByRole("button", { name: "تفعيل وضع المطور" }),
+      ).toBeNull();
+      expect(screen.queryByRole("region", { name: "وضع المطور" })).toBeNull();
+      // The LAN-restricted destructive database reset section stays hidden.
       expect(
         screen.queryByRole("region", { name: "إعادة ضبط قاعدة البيانات" }),
       ).toBeNull();

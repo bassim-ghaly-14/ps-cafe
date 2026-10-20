@@ -4,6 +4,7 @@ import StatCard from "../components/StatCard";
 import ConfirmDialog from "../components/ConfirmDialog";
 import WorkdayStamp from "../components/WorkdayStamp";
 import { useNow } from "../hooks/useNow";
+import { isReadOnly } from "../mode/visitor";
 import type { CafeResult } from "../hooks/useCafe";
 import type { BusinessDay, RentalSession, Station } from "../domain/types";
 import type { DayAggregate } from "../repositories/sessionRepo";
@@ -45,9 +46,12 @@ export default function BusinessDayScreen(props: Props) {
     [stations],
   );
   const dayClock = openDay ? liveHMS(openDay.startedAtUtc, now) : "00:00:00";
+  // Visitor mode is read-only: the business day can be observed but not
+  // opened or closed from a phone.
+  const readOnly = isReadOnly();
 
   const handleMain = async () => {
-    if (busy) return;
+    if (busy || readOnly) return;
     if (!openDay) {
       const r = await onOpen();
       setNotice({
@@ -128,14 +132,16 @@ export default function BusinessDayScreen(props: Props) {
               {openDay ? t("day.closeHint") : t("day.openHint")}
             </div>
           </div>
-          <button
-            type="button"
-            className={openDay ? "btn stop" : "btn"}
-            disabled={busy}
-            onClick={handleMain}
-          >
-            {openDay ? t("day.close") : t("day.start")}
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              className={openDay ? "btn stop" : "btn"}
+              disabled={busy}
+              onClick={handleMain}
+            >
+              {openDay ? t("day.close") : t("day.start")}
+            </button>
+          )}
         </div>
       </div>
       <div className="grid stats">

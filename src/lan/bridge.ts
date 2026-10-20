@@ -15,7 +15,12 @@ export interface LanInterface {
 export interface LanStatus {
   running: boolean;
   enabled: boolean;
-  allowWrites: boolean;
+  /**
+   * Always `true`: the LAN gateway is permanently read-only. It is sent
+   * to the desktop UI so the panel can state the fact instead of offering
+   * a write toggle that no longer exists.
+   */
+  readOnly: boolean;
   address: string | null;
   port: number;
   url: string | null;
@@ -51,11 +56,6 @@ export async function lanPair(label?: string): Promise<LanPairing> {
 export async function lanSetEnabled(enabled: boolean): Promise<LanStatus> {
   guard();
   return invoke<LanStatus>("lan_set_enabled", { enabled });
-}
-
-export async function lanSetWrites(allow: boolean): Promise<LanStatus> {
-  guard();
-  return invoke<LanStatus>("lan_set_writes", { allow });
 }
 
 export async function lanRefresh(): Promise<LanStatus> {

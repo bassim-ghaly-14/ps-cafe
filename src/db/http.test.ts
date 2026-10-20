@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RepoError } from "./port";
 import { createHttpPort } from "./http";
 import { clearLanToken, writeLanToken } from "./http";
+import { READ_ONLY_CODE } from "../mode/visitor";
 
 const TOKEN = `pscafe_${"c".repeat(32)}`;
 
@@ -50,19 +51,34 @@ describe("http db port", () => {
     });
   });
 
+  it("rejects every mutation locally with READ_ONLY_MODE (no request is sent)", async () => {
+    writeLanToken(TOKEN);
+    const fetchMock = vi.fn(async () =>
+      jsonResponse(200, { ok: true, rows: [] }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const port = createHttpPort();
+    // The LAN gateway is permanently read-only: the browser refuses the
+    // write before any request leaves the device.
+    await expect(
+      port.execute("DELETE FROM stations", []),
+    ).rejects.toMatchObject({
+      code: READ_ONLY_CODE,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("maps gateway errors to RepoError codes", async () => {
     writeLanToken(TOKEN);
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
-        jsonResponse(403, { ok: false, error: "WRITES_DISABLED" }),
+        jsonResponse(403, { ok: false, error: "READ_ONLY_MODE" }),
       ),
     );
     const port = createHttpPort();
-    await expect(
-      port.execute("DELETE FROM stations", []),
-    ).rejects.toMatchObject({
-      code: "WRITES_DISABLED",
+    await expect(port.select("SELECT 1", [])).rejects.toMatchObject({
+      code: "READ_ONLY_MODE",
     });
   });
 

@@ -41,6 +41,9 @@ export default function LanBanner() {
           {t("lan.forget")}
         </button>
       </div>
+      {/* Visitor mode is read-only by design — state it plainly so the
+          visitor does not hunt for a control that is intentionally absent. */}
+      <p className="sub lan-readonly">{t("lan.phoneReadOnly")}</p>
     </div>
   );
 }

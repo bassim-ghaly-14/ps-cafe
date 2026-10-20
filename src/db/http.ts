@@ -1,5 +1,6 @@
 import type { DbPort } from "./port";
 import { RepoError } from "./port";
+import { READ_ONLY_CODE } from "../mode/visitor";
 
 /**
  * HTTP-backed DbPort for paired phones. Forwards the exact same
@@ -83,11 +84,14 @@ export function createHttpPort(options: HttpPortOptions = {}): DbPort {
     );
   }
   return {
-    execute: async (sql: string, params?: unknown[]) => {
-      await postJson<[]>(base, "/api/execute", token, {
-        sql,
-        params: params ?? [],
-      });
+    execute: async () => {
+      // Visitor mode is read-only. The gateway rejects writes too, but we
+      // fail locally so no mutation ever leaves the browser and callers
+      // get the same error code as the backend would return.
+      throw new RepoError(
+        READ_ONLY_CODE,
+        "Visitor mode: the LAN gateway is read-only.",
+      );
     },
     select: async <T>(sql: string, params?: unknown[]): Promise<T[]> => {
       return postJson<T[]>(base, "/api/select", token, {

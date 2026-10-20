@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { liveHMS, formatHours, formatNumber } from "../utils/format";
 import { formatRatePerHour } from "../utils/format";
+import { isReadOnly } from "../mode/visitor";
 import type { Station } from "../domain/types";
 
 interface Props {
@@ -35,6 +36,9 @@ export default function StationCard({
   const { t } = useTranslation();
   const timer = startUtc !== null ? liveHMS(startUtc, now) : "00:00:00";
   const canStart = dayOpen && !running && station.isActive;
+  // Visitor mode: the LAN gateway is read-only, so the start/stop control
+  // is never offered. The desktop is unaffected.
+  const readOnly = isReadOnly();
   return (
     <article
       className={running ? "card run" : "card"}
@@ -61,15 +65,17 @@ export default function StationCard({
           {formatRatePerHour(station.hourlyRateMinor)}
         </span>
       </button>
-      <button
-        type="button"
-        className={running ? "btn stop" : "btn"}
-        disabled={running ? busy : !canStart || busy}
-        onClick={running ? onStop : onStart}
-      >
-        {running ? t("stations.stop") : t("stations.start")}
-      </button>
-      {!dayOpen && !running && (
+      {!readOnly && (
+        <button
+          type="button"
+          className={running ? "btn stop" : "btn"}
+          disabled={running ? busy : !canStart || busy}
+          onClick={running ? onStop : onStart}
+        >
+          {running ? t("stations.stop") : t("stations.start")}
+        </button>
+      )}
+      {!dayOpen && !running && !readOnly && (
         <p className="lock-line">{t("stations.needsOpenDay")}</p>
       )}
       <div className="foot">

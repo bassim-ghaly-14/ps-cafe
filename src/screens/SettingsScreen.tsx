@@ -15,6 +15,7 @@ import DatabaseResetSection from "../components/DatabaseResetSection";
 import DeveloperSection from "../components/DeveloperSection";
 import LanPanel from "../components/LanPanel";
 import { isLanClient } from "../db/client";
+import { isReadOnly } from "../mode/visitor";
 import type { CafeResult } from "../hooks/useCafe";
 import type { RentalSession, Station } from "../domain/types";
 import type { DemoScenarioId } from "../dev/demoMode";
@@ -71,6 +72,9 @@ export default function SettingsScreen(props: Props) {
     onResetDone,
   } = props;
   const { t } = useTranslation();
+  // Visitor mode (LAN browser) is read-only: no station may be added,
+  // renamed, recolored, shown/hidden or activated from a phone.
+  const readOnly = isReadOnly();
   const [editing, setEditing] = useState<number | "new" | null>(null);
   const [name, setName] = useState("");
   const [color, setColor] = useState(PALETTE[0] ?? "#2ee6ff");
@@ -210,15 +214,17 @@ export default function SettingsScreen(props: Props) {
                 {t("settings.deviceCount", { count: stations.length })}
               </span>
             </div>
-            <button
-              type="button"
-              className="btn ghost"
-              disabled={busy}
-              onClick={() => startEdit(null)}
-            >
-              <Plus size={16} aria-hidden />
-              <span>{t("settings.add")}</span>
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                className="btn ghost"
+                disabled={busy}
+                onClick={() => startEdit(null)}
+              >
+                <Plus size={16} aria-hidden />
+                <span>{t("settings.add")}</span>
+              </button>
+            )}
           </div>
           {/* Column labels mirror the station row cells exactly:
             swatch | name | active status | actions. */}
@@ -251,93 +257,106 @@ export default function SettingsScreen(props: Props) {
                 </span>
               </span>
               <span className="set-ops settings-station-actions">
-                <button
-                  type="button"
-                  className="mini"
-                  disabled={busy}
-                  onClick={() => startEdit(s)}
-                  aria-label={t("settings.edit")}
-                  title={t("settings.edit")}
-                >
-                  <Pencil size={14} aria-hidden />
-                  <span>{t("settings.edit")}</span>
-                </button>
-                <button
-                  type="button"
-                  className="mini"
-                  disabled={busy}
-                  onClick={() =>
-                    quickSave(s, { visible: !s.isVisible, active: s.isActive })
-                  }
-                  aria-label={
-                    s.isVisible ? t("settings.hide") : t("settings.show")
-                  }
-                  title={s.isVisible ? t("settings.hide") : t("settings.show")}
-                >
-                  {s.isVisible ? (
-                    <EyeOff size={14} aria-hidden />
-                  ) : (
-                    <Eye size={14} aria-hidden />
-                  )}
-                  <span>
-                    {s.isVisible ? t("settings.hide") : t("settings.show")}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="mini"
-                  disabled={busy}
-                  onClick={() => startEdit(s)}
-                  aria-label={t("settings.changeColor")}
-                  title={t("settings.changeColor")}
-                >
-                  <Palette size={14} aria-hidden />
-                  <span>{t("settings.changeColor")}</span>
-                </button>
-                <button
-                  type="button"
-                  className={`mini danger ${s.isActive ? "" : "ghost"}`}
-                  disabled={busy}
-                  onClick={() =>
-                    s.isActive
-                      ? requestDeactivate(s)
-                      : quickSave(s, { visible: s.isVisible, active: true })
-                  }
-                  aria-label={
-                    s.isActive
-                      ? t("settings.deactivate")
-                      : t("settings.activate")
-                  }
-                  title={
-                    s.isActive
-                      ? t("settings.deactivate")
-                      : t("settings.activate")
-                  }
-                >
-                  {s.isActive ? (
-                    <PowerOff size={14} aria-hidden />
-                  ) : (
-                    <Power size={14} aria-hidden />
-                  )}
-                  <span>
-                    {s.isActive
-                      ? t("settings.deactivate")
-                      : t("settings.activate")}
-                  </span>
-                </button>
+                {!readOnly && (
+                  <>
+                    <button
+                      type="button"
+                      className="mini"
+                      disabled={busy}
+                      onClick={() => startEdit(s)}
+                      aria-label={t("settings.edit")}
+                      title={t("settings.edit")}
+                    >
+                      <Pencil size={14} aria-hidden />
+                      <span>{t("settings.edit")}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="mini"
+                      disabled={busy}
+                      onClick={() =>
+                        quickSave(s, {
+                          visible: !s.isVisible,
+                          active: s.isActive,
+                        })
+                      }
+                      aria-label={
+                        s.isVisible ? t("settings.hide") : t("settings.show")
+                      }
+                      title={
+                        s.isVisible ? t("settings.hide") : t("settings.show")
+                      }
+                    >
+                      {s.isVisible ? (
+                        <EyeOff size={14} aria-hidden />
+                      ) : (
+                        <Eye size={14} aria-hidden />
+                      )}
+                      <span>
+                        {s.isVisible ? t("settings.hide") : t("settings.show")}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="mini"
+                      disabled={busy}
+                      onClick={() => startEdit(s)}
+                      aria-label={t("settings.changeColor")}
+                      title={t("settings.changeColor")}
+                    >
+                      <Palette size={14} aria-hidden />
+                      <span>{t("settings.changeColor")}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`mini danger ${s.isActive ? "" : "ghost"}`}
+                      disabled={busy}
+                      onClick={() =>
+                        s.isActive
+                          ? requestDeactivate(s)
+                          : quickSave(s, { visible: s.isVisible, active: true })
+                      }
+                      aria-label={
+                        s.isActive
+                          ? t("settings.deactivate")
+                          : t("settings.activate")
+                      }
+                      title={
+                        s.isActive
+                          ? t("settings.deactivate")
+                          : t("settings.activate")
+                      }
+                    >
+                      {s.isActive ? (
+                        <PowerOff size={14} aria-hidden />
+                      ) : (
+                        <Power size={14} aria-hidden />
+                      )}
+                      <span>
+                        {s.isActive
+                          ? t("settings.deactivate")
+                          : t("settings.activate")}
+                      </span>
+                    </button>
+                  </>
+                )}
               </span>
             </div>
           ))}
           <p className="sub settings-note">{t("settings.note")}</p>
         </div>
       </section>
-      {/* Section 3 — QR / local-network pairing, below device management. */}
-      <section
-        className="settings-section"
-        aria-label={t("settings.lanSectionTitle")}
-      >
-        <LanPanel setNotice={setNotice} onStatusChange={onLanStatus} />
-      </section>
+      {/* Section 3 — QR / local-network pairing, below device management.
+          Desktop-only: the LAN panel drives the gateway, and a visitor has
+          no gateway of its own to configure. */}
+      {!isLanClient() && (
+        <section
+          className="settings-section"
+          aria-label={t("settings.lanSectionTitle")}
+        >
+          <LanPanel setNotice={setNotice} onStatusChange={onLanStatus} />
+        </section>
+      )}
       {/* Section 4 — Database reset: destructive, secondary admin action,
           kept apart from the normal configuration options above it. */}
       {!isLanClient() && (
@@ -355,24 +374,28 @@ export default function SettingsScreen(props: Props) {
         </section>
       )}
       {/* Section 5 — Developer Mode: always the last Settings section and
-          always visible (development + production builds, desktop + LAN
-          client). Visibility alone grants nothing: activation stays behind
-          the Developer PIN, and Demo Mode runs on an isolated local DB that
-          never reaches the LAN gateway or the production database. */}
-      <section
-        className="settings-section"
-        aria-label={t("settings.devSectionTitle")}
-      >
-        <DeveloperSection
-          demoActive={demoActive}
-          demoScenario={demoScenario}
-          demoError={demoError}
-          busy={busy}
-          onEnter={onDemoEnter}
-          onReseed={onDemoReseed}
-          onExit={onDemoExit}
-        />
-      </section>
+          always visible (development + production builds, desktop only).
+          Visibility alone grants nothing: activation stays behind the
+          Developer PIN, and Demo Mode runs on an isolated local DB that
+          never reaches the LAN gateway or the production database.
+          A visitor (LAN browser) is read-only and has no local writable
+          database, so Demo Mode is hidden there. */}
+      {!readOnly && (
+        <section
+          className="settings-section"
+          aria-label={t("settings.devSectionTitle")}
+        >
+          <DeveloperSection
+            demoActive={demoActive}
+            demoScenario={demoScenario}
+            demoError={demoError}
+            busy={busy}
+            onEnter={onDemoEnter}
+            onReseed={onDemoReseed}
+            onExit={onDemoExit}
+          />
+        </section>
+      )}
     </>
   );
 

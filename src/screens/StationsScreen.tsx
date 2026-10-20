@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import StationCard from "../components/StationCard";
 import { useNow } from "../hooks/useNow";
+import { isReadOnly } from "../mode/visitor";
 import type { CafeResult } from "../hooks/useCafe";
 import type { BusinessDay, RentalSession, Station } from "../domain/types";
 
@@ -27,7 +28,8 @@ export default function StationsScreen(props: Props) {
   const visible = stations.filter((s) => s.isVisible);
 
   const act = async (id: number, running: boolean) => {
-    if (busy) return;
+    // Visitor mode is read-only: never even attempt a mutation.
+    if (busy || isReadOnly()) return;
     const r = running ? await onStop(id) : await onStart(id);
     const params = r.params as Record<string, string> | undefined;
     setNotice({ kind: r.ok ? "ok" : "err", text: t(r.messageKey, params) });

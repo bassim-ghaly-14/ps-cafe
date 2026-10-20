@@ -142,6 +142,30 @@ section, but the LAN-restricted database reset stays hidden and blocked
 (`LAN_CLIENT`), and demo activation on a client is a purely local sandbox
 that never reaches the gateway or the desktop database.
 
+### ADR-016c — LAN visitor mode is permanently read-only (supersedes the LAN-client parts of ADR-016b)
+
+Context: the LAN/QR browser access could previously be flipped between read
+and write, and the Developer Mode section (which starts a *local writable*
+demo database) was offered to LAN clients. A phone on the same Wi-Fi could
+therefore mutate the shared, production database.
+Decision: the LAN gateway is a strictly read-only surface, permanently.
+`/api/execute` always answers `403 READ_ONLY_MODE`; the SQLite connection is
+opened with `SQLITE_OPEN_READ_ONLY` and the engine is put in `query_only`
+mode; the "allow writes" preference, API and UI toggle are removed. The
+access mode is *derived from the runtime*, never toggled: a Tauri webview is
+`desktop` (full read/write), a page served by the gateway is `visitor`
+(read-only), anything else is `standalone`. On a visitor, the frontend also
+refuses to send mutations at all and hides every mutation control (business
+day open/close, station start/stop, station add/edit, database reset,
+Developer Mode).
+Consequence: the desktop app remains the single writer of the production
+database. A paired phone is a view-only mirror; the read-only notice is shown
+instead of the removed write toggle. The Developer Mode section is no longer
+rendered for visitors (it would start a local writable database), so
+ADR-016b's "visible on LAN clients" clause no longer applies — the section
+itself stays free of read-only gating, and the parent Settings screen
+decides whether to mount it.
+
 ## ADR-020 — Per-device hourly pricing + proportional revenue (supersedes ADR-009)
 
 Context: business owner wants per-device hourly rate and device-level revenue

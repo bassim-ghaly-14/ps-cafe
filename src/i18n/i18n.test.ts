@@ -219,6 +219,37 @@ describe("translation resource integrity", () => {
   });
 });
 
+describe("visitor / read-only locale contract", () => {
+  /** Keys the read-only visitor mode relies on. */
+  const REQUIRED_READ_ONLY_KEYS = [
+    "common.readOnly",
+    "lan.readOnlyNotice",
+    "lan.phoneReadOnly",
+  ];
+
+  /** Obsolete write-toggle keys that must never come back. */
+  const OBSOLETE_KEYS = ["lan.allowWrites", "lan.writesHint", "lan.writesOff"];
+
+  it("every locale defines the read-only keys", () => {
+    for (const lang of SUPPORTED_LANGS) {
+      const flat = flatten(readLocaleRaw(lang));
+      for (const key of REQUIRED_READ_ONLY_KEYS) {
+        expect(flat[key], `${lang}:${key}`).toBeTypeOf("string");
+        expect((flat[key] as string).trim(), `${lang}:${key}`).not.toBe("");
+      }
+    }
+  });
+
+  it("no locale keeps the obsolete write-toggle keys", () => {
+    for (const lang of SUPPORTED_LANGS) {
+      const flat = flatten(readLocaleRaw(lang));
+      for (const key of OBSOLETE_KEYS) {
+        expect(flat[key], `${lang}:${key} must be removed`).toBeUndefined();
+      }
+    }
+  });
+});
+
 describe("cross-locale parity", () => {
   it("all locales expose identical key sets", () => {
     const first = SUPPORTED_LANGS[0] as string;

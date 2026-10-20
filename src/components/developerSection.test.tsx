@@ -149,7 +149,10 @@ describe("DeveloperSection visibility", () => {
     expect(screen.queryByText("بيانات تجريبية — ليست حقيقية")).toBeNull();
   });
 
-  it("renders on a LAN client (visibility is not LAN-gated)", () => {
+  it("is a pure component: read-only gating happens in the Settings screen", () => {
+    // The section itself performs no LAN/read-only gating — the parent
+    // Settings screen decides whether to offer it. A visitor never gets
+    // this component mounted (see SettingsScreen + visitorMode tests).
     (window as unknown as Record<string, unknown>).__PSCAFE_LAN__ = 1;
     renderSection();
     expect(

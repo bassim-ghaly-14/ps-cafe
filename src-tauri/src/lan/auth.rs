@@ -6,9 +6,10 @@
 //! URL fragment (`#k=...`) so it never hits server logs as a path/query
 //! and is never sent in the `Host`-validated static-asset path.
 //!
-//! Administrative/destructive operations (`execute`) additionally require
-//! writes to be enabled on the desktop (`allow_writes`); read-only
-//! (`select`) callers only need a valid token.
+//! The gateway exposes read operations only (`select`). There is no
+//! write endpoint and no preference that could enable one, so a paired
+//! device is a visitor: it can observe the cafe's data but never change
+//! it. Administrative changes are made exclusively on the desktop.
 
 use rand::RngCore;
 use std::time::{Duration, Instant};
