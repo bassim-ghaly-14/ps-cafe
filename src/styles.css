@@ -179,6 +179,31 @@ body {
   font-size: 44px;
   letter-spacing: 1px;
 }
+
+/* Opening card: timer + opening timestamp are the primary information;
+   the explanatory hint stays secondary. */
+.day-status {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.opened {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+.opened-label {
+  font-size: 13px;
+  color: var(--mute);
+}
+.opened-at {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
 .btn {
   font: inherit;
   font-size: 15px;
@@ -343,8 +368,75 @@ tr.row-open td {
 .card .time {
   font-family: var(--mono);
   font-size: 34px;
-  margin: 12px 0 14px;
+  margin: 12px 0 4px;
   text-align: end;
+}
+.card-open {
+  display: block;
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.card-open .top,
+.card-open .time {
+  width: 100%;
+}
+.rate-line {
+  display: block;
+  font-size: 12px;
+  color: var(--mute);
+  margin-bottom: 12px;
+}
+/* Device details page. */
+.dev-head {
+  border-top: 3px solid var(--accent);
+}
+.dev-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.dev-name {
+  font-size: 20px;
+  overflow-wrap: anywhere;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.dev-meta {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 14px;
+}
+.dev-rate b {
+  font-size: 15px;
+}
+.dev-today {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+.stat.revenue b {
+  color: var(--ok);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.stat small {
+  display: block;
+  margin-top: 4px;
+}
+td.n,
+.stat b.n,
+.dev-rate b.n {
+  font-variant-numeric: tabular-nums;
 }
 .card .btn {
   width: 100%;
@@ -474,7 +566,8 @@ tr.row-open td {
   opacity: 0.35;
   cursor: not-allowed;
 }
-input[type="text"] {
+input[type="text"],
+input[type="number"] {
   width: 100%;
   background: var(--bg);
   border: 1px solid var(--line);
@@ -631,6 +724,13 @@ input[type="password"] {
   .clock {
     font-size: 34px;
   }
+  .dev-today {
+    gap: 10px;
+  }
+  th:nth-child(4),
+  td:nth-child(4) {
+    display: none;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   * {
@@ -639,7 +739,8 @@ input[type="password"] {
   }
 }
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+.card-open:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }

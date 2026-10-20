@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getActiveDb } from "../db/client";
 import { canCloseDay } from "../domain/businessDay";
+import { parseHourlyRateInput } from "../domain/pricing";
 import { canStartSessionDetailed } from "../domain/rentalSession";
 import * as dayRepo from "../repositories/businessDayRepo";
 import * as stationRepo from "../repositories/stationRepo";
 import * as sessionRepo from "../repositories/sessionRepo";
 import { formatHMS } from "../utils/time";
 import type { BusinessDay, RentalSession, Station } from "../domain/types";
+import type { DayAggregate } from "../repositories/sessionRepo";
 
 export interface CafeResult {
   ok: boolean;
@@ -23,7 +25,8 @@ export interface CafeState {
   activeSessions: RentalSession[];
   closedDaysCount: number;
   allTime: { count: number; totalMs: number };
-  dayAgg: { count: number; totalMs: number };
+  dayAgg: DayAggregate;
+  dayAggregates: Map<number, DayAggregate>;
   perStation: Map<number, { count: number; totalMs: number }>;
   refresh: () => Promise<void>;
 }
@@ -53,7 +56,14 @@ export function useCafeData() {
   const [activeSessions, setActiveSessions] = useState<RentalSession[]>([]);
   const [closedDaysCount, setClosedDaysCount] = useState(0);
   const [allTime, setAllTime] = useState({ count: 0, totalMs: 0 });
-  const [dayAgg, setDayAgg] = useState({ count: 0, totalMs: 0 });
+  const [dayAgg, setDayAgg] = useState<DayAggregate>({
+    count: 0,
+    totalMs: 0,
+    revenueMinor: 0,
+  });
+  const [dayAggregates, setDayAggregates] = useState(
+    new Map<number, DayAggregate>(),
+  );
   const [perStation, setPerStation] = useState(
     new Map<number, { count: number; totalMs: number }>(),
   );
@@ -69,18 +79,23 @@ export function useCafeData() {
   const refresh = useCallback(async () => {
     try {
       await getActiveDb();
-      const [open, history, stList, active, closed, all] = await Promise.all([
-        dayRepo.getOpenDay(),
-        dayRepo.listDays(50),
-        stationRepo.listStations(),
-        sessionRepo.listActiveSessions(),
-        dayRepo.countClosedDays(),
-        sessionRepo.aggregateAllTime(),
-      ]);
-      let cur = { count: 0, totalMs: 0 };
+      const [open, history, stList, active, closed, all, aggregates] =
+        await Promise.all([
+          dayRepo.getOpenDay(),
+          dayRepo.listDays(50),
+          stationRepo.listStations(),
+          sessionRepo.listActiveSessions(),
+          dayRepo.countClosedDays(),
+          sessionRepo.aggregateAllTime(),
+          sessionRepo.listDayAggregates(),
+        ]);
+      const byDay = new Map(
+        aggregates.map((a) => [a.dayId, { ...a } as DayAggregate]),
+      );
+      let cur = { count: 0, totalMs: 0, revenueMinor: 0 };
       let per = new Map<number, { count: number; totalMs: number }>();
       if (open) {
-        cur = await sessionRepo.aggregateForDay(open.id);
+        cur = byDay.get(open.id) ?? cur;
         const byStation = await sessionRepo.aggregateByStation(open.id);
         per = new Map(
           byStation.map((b) => [
@@ -98,6 +113,7 @@ export function useCafeData() {
       setClosedDaysCount(closed);
       setAllTime(all);
       setDayAgg(cur);
+      setDayAggregates(byDay);
       setPerStation(per);
     } catch (e) {
       if (!mounted.current) return;
@@ -121,6 +137,7 @@ export function useCafeData() {
     closedDaysCount,
     allTime,
     dayAgg,
+    dayAggregates,
     perStation,
     refresh,
     mounted,
@@ -138,6 +155,7 @@ export function useCafeActions(refresh: () => Promise<void>): {
     color: string,
     visible: boolean,
     active: boolean,
+    hourlyRateMinor: number | string,
   ) => Promise<CafeResult>;
 } {
   const openBusinessDay = async (): Promise<CafeResult> => {
@@ -259,6 +277,7 @@ export function useCafeActions(refresh: () => Promise<void>): {
     color: string,
     visible: boolean,
     active: boolean,
+    hourlyRateMinor: number | string,
   ): Promise<CafeResult> => {
     const trimmed = name.trim().replace(/\s+/g, " ");
     if (trimmed.length === 0)
@@ -267,12 +286,38 @@ export function useCafeActions(refresh: () => Promise<void>): {
       return { ok: false, messageKey: "settings.nameTooLong" };
     if (!/^#[0-9a-fA-F]{6}$/.test(color))
       return { ok: false, messageKey: "common.error" };
+    // Rate is accepted as integer minor units (repo path) or a major-unit
+    // string (form path). Empty / malformed / negative input is rejected —
+    // never silently coerced to 0.
+    let minor: number;
+    if (typeof hourlyRateMinor === "number") {
+      minor = hourlyRateMinor;
+    } else {
+      const parsed = parseHourlyRateInput(hourlyRateMinor);
+      if (!parsed.ok)
+        return {
+          ok: false,
+          messageKey:
+            parsed.code === "RATE_REQUIRED"
+              ? "settings.rateRequired"
+              : "settings.rateInvalid",
+        };
+      minor = parsed.minor;
+    }
+    if (
+      !Number.isInteger(minor) ||
+      minor < 0 ||
+      minor > 1_000_000 ||
+      !Number.isFinite(minor)
+    ) {
+      return { ok: false, messageKey: "settings.rateInvalid" };
+    }
     try {
       const all = await stationRepo.listStations();
       const dup = all.some((s) => s.id !== id && s.name.trim() === trimmed);
       if (dup) return { ok: false, messageKey: "settings.nameTaken" };
       if (id === null) {
-        await stationRepo.createStation(trimmed, color);
+        await stationRepo.createStation(trimmed, color, minor);
         await refresh();
         return { ok: true, messageKey: "settings.added" };
       }
@@ -286,6 +331,7 @@ export function useCafeActions(refresh: () => Promise<void>): {
         colorHex: color,
         isVisible: visible,
         isActive: active,
+        hourlyRateMinor: minor,
       });
       await refresh();
       return { ok: true, messageKey: "settings.updated" };

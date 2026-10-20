@@ -13,6 +13,8 @@ export interface Station {
   sortOrder: number;
   isVisible: boolean;
   isActive: boolean;
+  /** Configured hourly rate in minor currency units (integer, >= 0). 0 = not priced. */
+  hourlyRateMinor: number;
   createdAtUtc: number;
   updatedAtUtc: number;
 }
@@ -24,6 +26,12 @@ export interface RentalSession {
   startedAtUtc: number;
   endedAtUtc: number | null;
   durationMs: number | null;
+  /**
+   * Hourly-rate snapshot (minor units) captured when the session started.
+   * NULL = recorded before per-device pricing existed (legacy, unpriced).
+   * Never updated afterwards, so price changes can't rewrite history.
+   */
+  rateMinorAtStart: number | null;
 }
 
 export type ActiveTab = "day" | "stations" | "settings";

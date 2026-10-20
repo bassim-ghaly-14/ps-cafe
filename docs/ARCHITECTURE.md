@@ -105,7 +105,10 @@ add `locales/<lang>/translation.json` + `SUPPORTED_LANGS` entry; no component ch
 
 ## 7. Anti-patterns (forbidden)
 SQL in components; tick-accumulated timers; calendar-date as day id; footer element;
-top tabs; emoji icons; revenue/pricing fields; `any`/assertions for domain types;
-broad Tauri capabilities; in-memory SQLite for production; DB file under `src/`;
-auto open/close of days or sessions; force-closing sessions on day close;
-hardcoded user-facing strings outside translation resources; browser alert/confirm.
+top tabs; emoji icons; `any`/assertions for domain types; broad Tauri capabilities;
+in-memory SQLite for production; DB file under `src/`; auto open/close of days or
+sessions; force-closing sessions on day close; hardcoded user-facing strings outside
+translation resources; browser alert/confirm.
+Per-device hourly pricing IS permitted (see docs/DECISIONS.md ADR-020) under the rules:
+rate stored as integer minor units; session rate snapshot at start; revenue proportional
+to duration using each session's own snapshot; historical sessions never recalculated.

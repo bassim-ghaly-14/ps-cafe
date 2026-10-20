@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS stations(
   sort_order INTEGER NOT NULL DEFAULT 0,
   is_visible INTEGER NOT NULL DEFAULT 1 CHECK(is_visible IN (0,1)),
   is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)),
+  hourly_rate_minor INTEGER NOT NULL DEFAULT 0 CHECK(hourly_rate_minor >= 0),
   created_at_utc INTEGER NOT NULL,
   updated_at_utc INTEGER NOT NULL
 );
@@ -25,7 +26,8 @@ CREATE TABLE IF NOT EXISTS rental_sessions(
   business_day_id INTEGER NOT NULL REFERENCES business_days(id),
   started_at_utc INTEGER NOT NULL,
   ended_at_utc INTEGER NULL CHECK(ended_at_utc IS NULL OR ended_at_utc >= started_at_utc),
-  duration_ms INTEGER NULL CHECK(duration_ms IS NULL OR duration_ms >= 0)
+  duration_ms INTEGER NULL CHECK(duration_ms IS NULL OR duration_ms >= 0),
+  rate_minor_at_start INTEGER NULL CHECK(rate_minor_at_start IS NULL OR (rate_minor_at_start = CAST(rate_minor_at_start AS INTEGER) AND rate_minor_at_start >= 0))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_active_session_per_station
   ON rental_sessions(station_id) WHERE ended_at_utc IS NULL;

@@ -120,9 +120,7 @@ function findRequiredRow(
 }
 
 /** localStorage-backed interpreter for the exact SQL subset repos use. */
-export function createMemoryPort(
-  options: MemoryPortOptions = {},
-): DbPort {
+export function createMemoryPort(options: MemoryPortOptions = {}): DbPort {
   const key = options.ephemeral ? null : (options.storageKey ?? MEM_KEY);
   const tables = key === null ? emptyTables() : loadTables(key);
 
@@ -161,6 +159,7 @@ export function createMemoryPort(
         sort_order: index,
         is_visible: 1,
         is_active: 1,
+        hourly_rate_minor: 0,
         created_at_utc: now,
         updated_at_utc: now,
       });
@@ -215,8 +214,7 @@ export function createMemoryPort(
 
     const hasActiveSessions = tables.rental_sessions.some(
       (session) =>
-        session["business_day_id"] === id &&
-        session["ended_at_utc"] === null,
+        session["business_day_id"] === id && session["ended_at_utc"] === null,
     );
 
     if (hasActiveSessions) {
@@ -230,15 +228,28 @@ export function createMemoryPort(
     persist();
   }
 
+  function getRateParam(params: unknown[], index: number): number {
+    const value = params[index];
+    if (
+      typeof value !== "number" ||
+      !Number.isInteger(value) ||
+      value < 0 ||
+      value > 1_000_000
+    ) {
+      throw constraintError("CHECK failed: hourly_rate_minor >= 0");
+    }
+    return value;
+  }
+
   function insertStation(params: unknown[]): void {
     const name = getStringParam(params, 0);
     validateStationName(name);
 
     seqStation += 1;
 
-    if (params.length === 5) {
+    if (params.length === 6) {
       // Production createStation() form:
-      // (name, color_hex, sort_order, created_at_utc, updated_at_utc)
+      // (name, color_hex, sort_order, hourly_rate_minor, created_at_utc, updated_at_utc)
       // is_visible and is_active default to 1.
       tables.stations.push({
         id: seqStation,
@@ -247,6 +258,20 @@ export function createMemoryPort(
         sort_order: getNumericParam(params, 2),
         is_visible: 1,
         is_active: 1,
+        hourly_rate_minor: getRateParam(params, 3),
+        created_at_utc: getNumericParam(params, 4),
+        updated_at_utc: getNumericParam(params, 5),
+      });
+    } else if (params.length === 5) {
+      // Legacy (pre-pricing) form — default rate to 0 (unpriced).
+      tables.stations.push({
+        id: seqStation,
+        name,
+        color_hex: getStringParam(params, 1),
+        sort_order: getNumericParam(params, 2),
+        is_visible: 1,
+        is_active: 1,
+        hourly_rate_minor: 0,
         created_at_utc: getNumericParam(params, 3),
         updated_at_utc: getNumericParam(params, 4),
       });
@@ -258,6 +283,7 @@ export function createMemoryPort(
         sort_order: getNumericParam(params, 2),
         is_visible: getNumericParam(params, 3),
         is_active: getNumericParam(params, 4),
+        hourly_rate_minor: 0,
         created_at_utc: getNumericParam(params, 5),
         updated_at_utc: getNumericParam(params, 6),
       });
@@ -267,8 +293,8 @@ export function createMemoryPort(
   }
 
   function updateStation(params: unknown[]): void {
-    // UPDATE stations ... WHERE id=? (6 params, indices 0..5)
-    const id = getNumericParam(params, 5);
+    // UPDATE stations ... WHERE id=? (7 params, indices 0..6)
+    const id = getNumericParam(params, 6);
 
     const row = findRequiredRow(
       tables.stations,
@@ -282,12 +308,12 @@ export function createMemoryPort(
 
     const isVisible = getFlagParam(params, 2);
     const isActive = getFlagParam(params, 3);
+    const rate = getRateParam(params, 4);
 
     // An active rental prevents deactivating its station.
     const hasActiveSession = tables.rental_sessions.some(
       (session) =>
-        session["station_id"] === id &&
-        session["ended_at_utc"] === null,
+        session["station_id"] === id && session["ended_at_utc"] === null,
     );
 
     if (isActive === 0 && hasActiveSession) {
@@ -301,7 +327,8 @@ export function createMemoryPort(
     row["color_hex"] = getStringParam(params, 1);
     row["is_visible"] = isVisible;
     row["is_active"] = isActive;
-    row["updated_at_utc"] = getNumericParam(params, 4);
+    row["hourly_rate_minor"] = rate;
+    row["updated_at_utc"] = getNumericParam(params, 5);
 
     persist();
   }
@@ -310,18 +337,21 @@ export function createMemoryPort(
     const stationId = getNumericParam(params, 0);
     const dayId = getNumericParam(params, 1);
     const started = getNumericParam(params, 2);
+    // params[3] is the rate snapshot for post-pricing inserts; legacy
+    // inserts have only 3 params and default to NULL (unpriced).
+    const snapshot =
+      params.length >= 4
+        ? getRateParam(params, 3)
+        : (null as unknown as number);
 
-    const station = tables.stations.find(
-      (row) => row["id"] === stationId,
-    );
+    const station = tables.stations.find((row) => row["id"] === stationId);
 
     if (!station || station["is_active"] !== 1) {
       throw new RepoError("STATION_INACTIVE", "Station not eligible.");
     }
 
     const day = tables.business_days.find(
-      (row) =>
-        row["id"] === dayId && row["ended_at_utc"] === null,
+      (row) => row["id"] === dayId && row["ended_at_utc"] === null,
     );
 
     if (!day) {
@@ -330,14 +360,11 @@ export function createMemoryPort(
 
     const hasActiveSession = tables.rental_sessions.some(
       (session) =>
-        session["station_id"] === stationId &&
-        session["ended_at_utc"] === null,
+        session["station_id"] === stationId && session["ended_at_utc"] === null,
     );
 
     if (hasActiveSession) {
-      throw constraintError(
-        "UNIQUE failed: uq_active_session_per_station",
-      );
+      throw constraintError("UNIQUE failed: uq_active_session_per_station");
     }
 
     seqSession += 1;
@@ -349,6 +376,7 @@ export function createMemoryPort(
       started_at_utc: started,
       ended_at_utc: null,
       duration_ms: null,
+      rate_minor_at_start: snapshot,
     });
 
     persist();
@@ -361,16 +389,12 @@ export function createMemoryPort(
 
     const row = findRequiredRow(
       tables.rental_sessions,
-      (session) =>
-        session["id"] === id && session["ended_at_utc"] === null,
+      (session) => session["id"] === id && session["ended_at_utc"] === null,
       "NOT_FOUND",
       "Active session not found.",
     );
 
-    if (
-      !(endTs >= (row["started_at_utc"] as number)) ||
-      !(duration >= 0)
-    ) {
+    if (!(endTs >= (row["started_at_utc"] as number)) || !(duration >= 0)) {
       throw constraintError("CHECK failed: session timestamps");
     }
 
@@ -380,10 +404,7 @@ export function createMemoryPort(
     persist();
   }
 
-  async function execute(
-    sql: string,
-    params: unknown[] = [],
-  ): Promise<void> {
+  async function execute(sql: string, params: unknown[] = []): Promise<void> {
     const query = norm(sql);
 
     if (isSchemaStatement(query)) {
@@ -439,17 +460,16 @@ export function createMemoryPort(
       query.startsWith("pragma") ||
       query.startsWith("create table") ||
       query.startsWith("create unique index") ||
-      query.startsWith("create index")
+      query.startsWith("create index") ||
+      // Pricing migration: memory rows are schemaless records, so ALTER
+      // TABLE ADD COLUMN is a no-op (rows simply carry the new keys).
+      query.startsWith("alter table")
     );
   }
 
-  async function select<T>(
-    sql: string,
-    params: unknown[] = [],
-  ): Promise<T[]> {
+  async function select<T>(sql: string, params: unknown[] = []): Promise<T[]> {
     const query = norm(sql);
-    const num = (index: number): number =>
-      params[index] as number;
+    const num = (index: number): number => params[index] as number;
 
     const rows = (items: Record<string, unknown>[]): T[] =>
       items as unknown as T[];
@@ -458,9 +478,7 @@ export function createMemoryPort(
       return rows(tables.schema_meta.map((row) => ({ ...row })));
     }
 
-    if (
-      query.includes("from business_days where ended_at_utc is null")
-    ) {
+    if (query.includes("from business_days where ended_at_utc is null")) {
       return rows(
         tables.business_days
           .filter((row) => row["ended_at_utc"] === null)
@@ -472,18 +490,13 @@ export function createMemoryPort(
       return rows(
         [...tables.business_days]
           .sort(
-            (a, b) =>
-              ((b["id"] as number) ?? 0) -
-              ((a["id"] as number) ?? 0),
+            (a, b) => ((b["id"] as number) ?? 0) - ((a["id"] as number) ?? 0),
           )
           .map((row) => ({ ...row })),
       );
     }
 
-    if (
-      query.includes("from business_days") &&
-      query.includes("count(*)")
-    ) {
+    if (query.includes("from business_days") && query.includes("count(*)")) {
       const count = tables.business_days.filter(
         (row) => row["ended_at_utc"] !== null,
       ).length;
@@ -504,17 +517,13 @@ export function createMemoryPort(
         (a, b) =>
           ((a["sort_order"] as number) ?? 0) -
             ((b["sort_order"] as number) ?? 0) ||
-          ((a["id"] as number) ?? 0) -
-            ((b["id"] as number) ?? 0),
+          ((a["id"] as number) ?? 0) - ((b["id"] as number) ?? 0),
       );
 
       return rows(sorted.map((row) => ({ ...row })));
     }
 
-    if (
-      query.includes("max(sort_order)") &&
-      query.includes("from stations")
-    ) {
+    if (query.includes("max(sort_order)") && query.includes("from stations")) {
       const maxOrder = tables.stations.reduce(
         (maximum, row) =>
           Math.max(maximum, (row["sort_order"] as number) ?? -1),
@@ -533,15 +542,11 @@ export function createMemoryPort(
     }
 
     if (query.includes("from stations where is_active")) {
-      const filtered = tables.stations.filter(
-        (row) => row["is_active"] === 1,
-      );
+      const filtered = tables.stations.filter((row) => row["is_active"] === 1);
 
       if (query.includes("order by id")) {
         filtered.sort(
-          (a, b) =>
-            ((a["id"] as number) ?? 0) -
-            ((b["id"] as number) ?? 0),
+          (a, b) => ((a["id"] as number) ?? 0) - ((b["id"] as number) ?? 0),
         );
       }
 
@@ -552,102 +557,52 @@ export function createMemoryPort(
       return rows(tables.stations.map((row) => ({ ...row })));
     }
 
-    if (query.includes("from rental_sessions where station_id")) {
-      return rows(
-        tables.rental_sessions
-          .filter(
-            (row) =>
-              row["station_id"] === num(0) &&
-              row["ended_at_utc"] === null,
-          )
-          .map((row) => ({ ...row })),
-      );
-    }
-
-    if (
-      query.includes("from rental_sessions where business_day_id") &&
-      query.includes("ended_at_utc is null")
-    ) {
-      const id = num(0);
-
-      return rows(
-        tables.rental_sessions
-          .filter(
-            (row) =>
-              row["business_day_id"] === id &&
-              row["ended_at_utc"] === null,
-          )
-          .map((row) => ({ ...row })),
-      );
-    }
-
-    if (
-      query.includes("from rental_sessions where ended_at_utc is null")
-    ) {
-      return rows(
-        tables.rental_sessions
-          .filter((row) => row["ended_at_utc"] === null)
-          .map((row) => ({ ...row })),
-      );
-    }
-
-    if (
-      query.includes("from rental_sessions") &&
-      query.includes("count(*)") &&
-      query.includes("business_day_id")
-    ) {
-      const id = num(0);
-
-      const completed = tables.rental_sessions.filter(
-        (row) =>
-          row["business_day_id"] === id &&
-          row["ended_at_utc"] !== null,
-      );
-
-      const totalMs = completed.reduce(
-        (total, row) =>
-          total + ((row["duration_ms"] as number) ?? 0),
-        0,
-      );
-
-      return rows([{ count: completed.length, totalMs }]);
-    }
-
-    if (
-      query.includes("from rental_sessions where business_day_id")
-    ) {
-      const id = num(0);
-
-      return rows(
-        tables.rental_sessions
-          .filter((row) => row["business_day_id"] === id)
-          .map((row) => ({ ...row })),
-      );
-    }
-
-    if (
-      query.includes("from rental_sessions") &&
-      query.includes("count(*)")
-    ) {
-      const completed = tables.rental_sessions.filter(
-        (row) => row["ended_at_utc"] !== null,
-      );
-
-      const totalMs = completed.reduce(
-        (total, row) =>
-          total + ((row["duration_ms"] as number) ?? 0),
-        0,
-      );
-
-      return rows([{ count: completed.length, totalMs }]);
-    }
-
-    if (query.includes("group by station_id")) {
-      const id = num(0);
+    // Aggregated queries must be matched BEFORE the generic rental_sessions
+    // branches below: they also mention `station_id` / `count(*)` /
+    // `business_day_id`, and those generic branches would otherwise swallow
+    // the GROUP BY query and return the wrong shape (raw session rows or a
+    // single un-grouped row instead of one row per group).
+    //
+    // Per-day aggregates for ALL closed workdays in a single pass — used by
+    // the workday history table so each row gets only its own sessions.
+    if (query.includes("group by business_day_id")) {
       const aggregates = new Map<
         number,
-        { count: number; totalMs: number }
+        { count: number; totalMs: number; revenueMinor: number }
       >();
+
+      for (const session of tables.rental_sessions) {
+        if (session["ended_at_utc"] === null) continue;
+
+        const dayId = (session["business_day_id"] as number) ?? 0;
+        let aggregate = aggregates.get(dayId);
+        if (!aggregate) {
+          aggregate = { count: 0, totalMs: 0, revenueMinor: 0 };
+          aggregates.set(dayId, aggregate);
+        }
+
+        const duration = (session["duration_ms"] as number) ?? 0;
+        aggregate.count += 1;
+        aggregate.totalMs += duration;
+
+        const rate = session["rate_minor_at_start"];
+        if (typeof rate === "number" && typeof duration === "number") {
+          aggregate.revenueMinor += Math.round((duration * rate) / 3_600_000);
+        }
+      }
+
+      return rows(
+        [...aggregates.entries()].map(([dayId, aggregate]) => ({
+          dayId,
+          ...aggregate,
+        })),
+      );
+    }
+
+    // Per-station aggregate for ONE business day.
+    if (query.includes("group by station_id")) {
+      const id = num(0);
+      const aggregates = new Map<number, { count: number; totalMs: number }>();
 
       for (const session of tables.rental_sessions) {
         if (
@@ -664,8 +619,7 @@ export function createMemoryPort(
         };
 
         aggregate.count += 1;
-        aggregate.totalMs +=
-          (session["duration_ms"] as number) ?? 0;
+        aggregate.totalMs += (session["duration_ms"] as number) ?? 0;
 
         aggregates.set(stationId, aggregate);
       }
@@ -681,6 +635,144 @@ export function createMemoryPort(
       return rows(result);
     }
 
+    // Completed sessions for ONE station (details-page aggregate source).
+    // Must precede the generic station_id branch below, which only matches
+    // active (ended_at_utc IS NULL) sessions.
+    if (
+      query.includes("from rental_sessions") &&
+      query.includes("station_id") &&
+      query.includes("ended_at_utc is not null")
+    ) {
+      const id = num(0);
+      const completed = tables.rental_sessions
+        .filter(
+          (row) => row["station_id"] === id && row["ended_at_utc"] !== null,
+        )
+        .sort((a, b) => ((a["id"] as number) ?? 0) - ((b["id"] as number) ?? 0))
+        .map((row) => ({ ...row }));
+      return rows(completed);
+    }
+
+    // Paginated, newest-first history for ONE station. Supports LIMIT/OFFSET
+    // params; slices defensively since not every driver binds LIMIT.
+    if (
+      query.includes("from rental_sessions") &&
+      query.includes("station_id") &&
+      query.includes("order by started_at_utc desc")
+    ) {
+      const id = num(0);
+      const limit = typeof params[1] === "number" ? (params[1] as number) : 20;
+      const offset = typeof params[2] === "number" ? (params[2] as number) : 0;
+      const sorted = tables.rental_sessions
+        .filter((row) => row["station_id"] === id)
+        .sort(
+          (a, b) =>
+            ((b["started_at_utc"] as number) ?? 0) -
+              ((a["started_at_utc"] as number) ?? 0) ||
+            ((b["id"] as number) ?? 0) - ((a["id"] as number) ?? 0),
+        );
+      return rows(
+        sorted.slice(offset, offset + limit).map((row) => ({ ...row })),
+      );
+    }
+
+    // COUNT for ONE station's history total. Must precede the generic
+    // count(*) branches (day-scoped and all-time) below.
+    if (
+      query.includes("from rental_sessions") &&
+      query.includes("count(*)") &&
+      query.includes("station_id")
+    ) {
+      const id = num(0);
+      const count = tables.rental_sessions.filter(
+        (row) => row["station_id"] === id,
+      ).length;
+      return rows([{ count }]);
+    }
+
+    if (query.includes("from rental_sessions where station_id")) {
+      return rows(
+        tables.rental_sessions
+          .filter(
+            (row) =>
+              row["station_id"] === num(0) && row["ended_at_utc"] === null,
+          )
+          .map((row) => ({ ...row })),
+      );
+    }
+
+    if (
+      query.includes("from rental_sessions where business_day_id") &&
+      query.includes("ended_at_utc is null")
+    ) {
+      const id = num(0);
+
+      return rows(
+        tables.rental_sessions
+          .filter(
+            (row) =>
+              row["business_day_id"] === id && row["ended_at_utc"] === null,
+          )
+          .map((row) => ({ ...row })),
+      );
+    }
+
+    if (query.includes("from rental_sessions where ended_at_utc is null")) {
+      return rows(
+        tables.rental_sessions
+          .filter((row) => row["ended_at_utc"] === null)
+          .map((row) => ({ ...row })),
+      );
+    }
+
+    if (
+      query.includes("from rental_sessions") &&
+      query.includes("count(*)") &&
+      query.includes("business_day_id")
+    ) {
+      const id = num(0);
+
+      const completed = tables.rental_sessions.filter(
+        (row) => row["business_day_id"] === id && row["ended_at_utc"] !== null,
+      );
+
+      let totalMs = 0;
+      let revenueMinor = 0;
+      for (const row of completed) {
+        const duration = (row["duration_ms"] as number) ?? 0;
+        totalMs += duration;
+        const rate = row["rate_minor_at_start"];
+        if (typeof rate === "number" && typeof duration === "number") {
+          revenueMinor += Math.round((duration * rate) / 3_600_000);
+        }
+      }
+
+      return rows([{ count: completed.length, totalMs, revenueMinor }]);
+    }
+
+    if (query.includes("from rental_sessions where business_day_id")) {
+      const id = num(0);
+
+      return rows(
+        tables.rental_sessions
+          .filter((row) => row["business_day_id"] === id)
+          .map((row) => ({ ...row })),
+      );
+    }
+
+    if (query.includes("from rental_sessions") && query.includes("count(*)")) {
+      const completed = tables.rental_sessions.filter(
+        (row) => row["ended_at_utc"] !== null,
+      );
+
+      const totalMs = completed.reduce(
+        (total, row) => total + ((row["duration_ms"] as number) ?? 0),
+        0,
+      );
+
+      return rows([{ count: completed.length, totalMs }]);
+    }
+
     if (query.includes("from rental_sessions where id")) {
       return rows(
         tables.rental_sessions
@@ -689,9 +781,6 @@ export function createMemoryPort(
       );
     }
 
-    throw new RepoError(
-      "UNSUPPORTED_SQL",
-      "Memory backend cannot run select.",
-    );
+    throw new RepoError("UNSUPPORTED_SQL", "Memory backend cannot run select.");
   }
 }

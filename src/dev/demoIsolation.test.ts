@@ -38,6 +38,7 @@ describe("demo database isolation", () => {
       colorHex: "#ff0000",
       isVisible: true,
       isActive: true,
+      hourlyRateMinor: demoStations[0]!.hourlyRateMinor,
     });
     await exitDemoMode();
     expect(isDemoDbActive()).toBe(false);

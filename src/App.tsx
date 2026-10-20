@@ -4,7 +4,9 @@ import { FlaskConical } from "lucide-react";
 import BottomNav, { useActiveTabState } from "./components/BottomNav";
 import Splash from "./components/Splash";
 import BusinessDayScreen from "./screens/BusinessDayScreen";
+import HistoryScreen from "./screens/HistoryScreen";
 import StationsScreen from "./screens/StationsScreen";
+import StationDetailsScreen from "./screens/StationDetailsScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import { EGO_LOGO_ALT, EGO_LOGO_SRC } from "./brand";
 import { useCafeData, useCafeActions } from "./hooks/useCafe";
@@ -13,6 +15,17 @@ import { exitDemoMode } from "./dev/demoMode";
 import type { DemoScenarioId } from "./dev/demoMode";
 import "./i18n";
 import "./styles.css";
+
+function readHashStationId(): number | null {
+  try {
+    const m = /^#\/stations\/(\d+)$/.exec(window.location.hash);
+    if (!m) return null;
+    const id = Number(m[1]);
+    return Number.isInteger(id) && id > 0 ? id : null;
+  } catch {
+    return null;
+  }
+}
 
 function readSavedTab() {
   try {
@@ -46,6 +59,58 @@ export default function App() {
   const [demoActive, setDemoActive] = useState(false);
   const [demoScenario, setDemoScenario] = useState<DemoScenarioId | null>(null);
   const [demoError, setDemoError] = useState<string | null>(null);
+
+  // Dedicated device-details route: #/stations/:id (stable numeric id).
+  // Hash routing keeps refresh working with the static Tauri/file build —
+  // no router dependency, no parallel navigation architecture.
+  const [detailId, setDetailId] = useState<number | null>(() =>
+    readHashStationId(),
+  );
+
+  // Dedicated full-history route: #/history. Hash routing keeps refresh
+  // working with the static build, the same as the device-details route.
+  const [historyView, setHistoryView] = useState<boolean>(
+    () => window.location.hash === "#/history",
+  );
+
+  useEffect(() => {
+    const onHash = () => {
+      setDetailId(readHashStationId());
+      setHistoryView(window.location.hash === "#/history");
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  const openStation = useCallback((id: number) => {
+    setDetailId(id);
+    window.location.hash = `#/stations/${id}`;
+  }, []);
+  const closeStation = useCallback(() => {
+    // Back-navigation that respects browser history: when the details page
+    // was reached from the grid it returns there; on a direct/refresh load
+    // the hash is simply cleared to the stations tab.
+    try {
+      const h = window.location.hash;
+      if (h.startsWith("#/stations/")) window.location.hash = "";
+    } catch {
+      /* navigation unavailable */
+    }
+    setDetailId(null);
+  }, []);
+
+  const openHistory = useCallback(() => {
+    setHistoryView(true);
+    window.location.hash = "#/history";
+  }, []);
+  const closeHistory = useCallback(() => {
+    try {
+      if (window.location.hash === "#/history") window.location.hash = "";
+    } catch {
+      /* navigation unavailable */
+    }
+    setHistoryView(false);
+    setTab("day");
+  }, []);
 
   const handleDemoEnter = useCallback(
     async (scenario: DemoScenarioId) => {
@@ -176,44 +241,12 @@ export default function App() {
         </div>
       </header>
       <main className="main">
-        {tab === "day" && (
-          <BusinessDayScreen
+        {detailId !== null ? (
+          <StationDetailsScreen
+            key={detailId}
+            stationId={detailId}
             openDay={data.openDay}
-            days={data.days}
-            stations={data.stations}
-            activeSessions={data.activeSessions}
-            closedDaysCount={data.closedDaysCount}
-            allTime={data.allTime}
-            dayAgg={data.dayAgg}
-            busy={busy}
-            notice={notice}
-            onOpen={async () => {
-              setBusy(true);
-              try {
-                return await actions.openBusinessDay();
-              } finally {
-                setBusy(false);
-              }
-            }}
-            onClose={async () => {
-              setBusy(true);
-              try {
-                return await actions.closeBusinessDay();
-              } finally {
-                setBusy(false);
-              }
-            }}
-            setNotice={setNotice}
-          />
-        )}
-        {tab === "stations" && (
-          <StationsScreen
-            openDay={data.openDay}
-            stations={data.stations}
-            activeSessions={data.activeSessions}
-            perStation={data.perStation}
-            busy={busy}
-            notice={notice}
+            onBack={closeStation}
             onStart={async (id) => {
               setBusy(true);
               try {
@@ -232,26 +265,102 @@ export default function App() {
             }}
             setNotice={setNotice}
           />
-        )}
-        {tab === "settings" && (
-          <SettingsScreen
-            stations={data.stations}
-            activeSessions={data.activeSessions}
-            busy={busy}
-            notice={notice}
-            onSave={actions.saveStation}
-            setNotice={setNotice}
-            setBusy={setBusy}
-            demoActive={demoActive}
-            demoScenario={demoScenario}
-            demoError={demoError}
-            onDemoEnter={handleDemoEnter}
-            onDemoReseed={handleDemoReseed}
-            onDemoExit={handleDemoExit}
-          />
+        ) : (
+          <>
+            {historyView ? (
+              <HistoryScreen
+                openDay={data.openDay}
+                days={data.days}
+                dayAggregates={data.dayAggregates}
+                onBack={closeHistory}
+              />
+            ) : (
+              tab === "day" && (
+                <BusinessDayScreen
+                  openDay={data.openDay}
+                  stations={data.stations}
+                  activeSessions={data.activeSessions}
+                  dayAgg={data.dayAgg}
+                  busy={busy}
+                  notice={notice}
+                  onOpen={async () => {
+                    setBusy(true);
+                    try {
+                      return await actions.openBusinessDay();
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                  onClose={async () => {
+                    setBusy(true);
+                    try {
+                      return await actions.closeBusinessDay();
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                  setNotice={setNotice}
+                  onViewHistory={openHistory}
+                />
+              )
+            )}
+            {tab === "stations" && (
+              <StationsScreen
+                openDay={data.openDay}
+                stations={data.stations}
+                activeSessions={data.activeSessions}
+                perStation={data.perStation}
+                busy={busy}
+                notice={notice}
+                onStart={async (id) => {
+                  setBusy(true);
+                  try {
+                    return await actions.startStation(id);
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+                onStop={async (id) => {
+                  setBusy(true);
+                  try {
+                    return await actions.stopStation(id);
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+                onOpenStation={openStation}
+                setNotice={setNotice}
+              />
+            )}
+            {tab === "settings" && (
+              <SettingsScreen
+                stations={data.stations}
+                activeSessions={data.activeSessions}
+                busy={busy}
+                notice={notice}
+                onSave={actions.saveStation}
+                setNotice={setNotice}
+                setBusy={setBusy}
+                demoActive={demoActive}
+                demoScenario={demoScenario}
+                demoError={demoError}
+                onDemoEnter={handleDemoEnter}
+                onDemoReseed={handleDemoReseed}
+                onDemoExit={handleDemoExit}
+              />
+            )}
+          </>
         )}
       </main>
-      <BottomNav active={tab} onChange={setTab} />
+      <BottomNav
+        active={tab}
+        onChange={(t) => {
+          // Leaving the details/history routes returns to the tab shell.
+          if (detailId !== null) closeStation();
+          if (historyView) closeHistory();
+          setTab(t);
+        }}
+      />
     </div>
   );
 }

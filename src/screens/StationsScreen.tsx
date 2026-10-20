@@ -13,13 +13,14 @@ interface Props {
   notice: { kind: "ok" | "err"; text: string } | null;
   onStart: (id: number) => Promise<CafeResult>;
   onStop: (id: number) => Promise<CafeResult>;
+  onOpenStation: (id: number) => void;
   setNotice: (n: { kind: "ok" | "err"; text: string } | null) => void;
 }
 
 /** Stations screen: live cards from SQLite, never a hardcoded array. */
 export default function StationsScreen(props: Props) {
   const { openDay, stations, activeSessions, perStation, busy, notice } = props;
-  const { onStart, onStop, setNotice } = props;
+  const { onStart, onStop, onOpenStation, setNotice } = props;
   const { t } = useTranslation();
   const now = useNow(activeSessions.length > 0 || openDay !== null);
   const activeByStation = new Map(activeSessions.map((s) => [s.stationId, s]));
@@ -65,6 +66,7 @@ export default function StationsScreen(props: Props) {
                 busy={busy}
                 onStart={() => act(s.id, false)}
                 onStop={() => act(s.id, true)}
+                onOpen={() => onOpenStation(s.id)}
               />
             );
           })}

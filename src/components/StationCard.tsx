@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { liveHMS, formatHours, formatNumber } from "../utils/format";
+import { formatRatePerHour } from "../utils/format";
 import type { Station } from "../domain/types";
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
   busy: boolean;
   onStart: () => void;
   onStop: () => void;
+  onOpen: () => void;
 }
 
 /** Station card: colored border, status tag, mono timer, emphasis when running. */
@@ -28,6 +30,7 @@ export default function StationCard({
   busy,
   onStart,
   onStop,
+  onOpen,
 }: Props) {
   const { t } = useTranslation();
   const timer = startUtc !== null ? liveHMS(startUtc, now) : "00:00:00";
@@ -38,16 +41,26 @@ export default function StationCard({
       style={{ "--c": station.colorHex } as CSSProperties}
       aria-label={station.name}
     >
-      <div className="top">
-        <h4>{station.name}</h4>
-        <span className={running ? "tag on" : "tag"}>
-          <span className={running ? "sdot on" : "sdot"} aria-hidden />
-          {running ? t("stations.running") : t("stations.idle")}
+      <button
+        type="button"
+        className="card-open"
+        onClick={onOpen}
+        aria-label={station.name}
+      >
+        <span className="top">
+          <h4>{station.name}</h4>
+          <span className={running ? "tag on" : "tag"}>
+            <span className={running ? "sdot on" : "sdot"} aria-hidden />
+            {running ? t("stations.running") : t("stations.idle")}
+          </span>
         </span>
-      </div>
-      <div className="time" dir="ltr">
-        {timer}
-      </div>
+        <span className="time" dir="ltr">
+          {timer}
+        </span>
+        <span className="rate-line">
+          {formatRatePerHour(station.hourlyRateMinor)}
+        </span>
+      </button>
       <button
         type="button"
         className={running ? "btn stop" : "btn"}

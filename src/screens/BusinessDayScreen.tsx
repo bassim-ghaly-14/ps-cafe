@@ -5,33 +5,37 @@ import ConfirmDialog from "../components/ConfirmDialog";
 import { useNow } from "../hooks/useNow";
 import type { CafeResult } from "../hooks/useCafe";
 import type { BusinessDay, RentalSession, Station } from "../domain/types";
+import type { DayAggregate } from "../repositories/sessionRepo";
 import {
   formatDateTimeLocal,
   formatHours,
   formatNumber,
+  formatRevenue,
   liveHMS,
 } from "../utils/format";
 
 interface Props {
   openDay: BusinessDay | null;
-  days: BusinessDay[];
   stations: Station[];
   activeSessions: RentalSession[];
-  closedDaysCount: number;
-  allTime: { count: number; totalMs: number };
-  dayAgg: { count: number; totalMs: number };
+  dayAgg: DayAggregate;
   busy: boolean;
   notice: { kind: "ok" | "err"; text: string } | null;
   onOpen: () => Promise<CafeResult>;
   onClose: () => Promise<CafeResult>;
   setNotice: (n: { kind: "ok" | "err"; text: string } | null) => void;
+  onViewHistory: () => void;
 }
 
-/** Business-day screen: status, live clock, 4 stat cards, history table. */
+/**
+ * Business-day screen: the currently active workday only.
+ * Status + live clock, opening timestamp, and stat cards scoped to the
+ * open day. Full history lives on its own page (سجل أيام العمل).
+ */
 export default function BusinessDayScreen(props: Props) {
-  const { openDay, days, stations, activeSessions } = props;
-  const { closedDaysCount, allTime, dayAgg, busy, notice } = props;
-  const { onOpen, onClose, setNotice } = props;
+  const { openDay, stations, activeSessions } = props;
+  const { dayAgg, busy, notice } = props;
+  const { onOpen, onClose, setNotice, onViewHistory } = props;
   const { t } = useTranslation();
   const [confirming, setConfirming] = useState(false);
   const [blocked, setBlocked] = useState<string[] | null>(null);
@@ -108,19 +112,21 @@ export default function BusinessDayScreen(props: Props) {
       )}
       <div className="box">
         <div className="day-ctl">
-          <div>
+          <div className="day-status">
             <div className="clock" dir="ltr">
               {dayClock}
             </div>
+            {openDay && (
+              <div className="opened">
+                <span className="opened-label">{t("day.startedAt")}:</span>
+                <span className="opened-at" dir="ltr">
+                  {formatDateTimeLocal(openDay.startedAtUtc)}
+                </span>
+              </div>
+            )}
             <div className="sub">
               {openDay ? t("day.closeHint") : t("day.openHint")}
             </div>
-            {openDay && (
-              <div className="sub">
-                {t("day.startedAt")}:{" "}
-                {formatDateTimeLocal(openDay.startedAtUtc)}
-              </div>
-            )}
           </div>
           <button
             type="button"
@@ -134,64 +140,28 @@ export default function BusinessDayScreen(props: Props) {
       </div>
       <div className="grid stats">
         <StatCard
-          label={t("stats.closedDays")}
-          value={formatNumber(closedDaysCount)}
-        />
-        <StatCard
-          label={t("stats.totalSessions")}
-          value={formatNumber(allTime.count)}
-        />
-        <StatCard
-          label={t("stats.totalHours")}
-          value={formatHours(allTime.totalMs)}
-        />
-        <StatCard
           label={t("stats.todaySessions")}
-          value={openDay ? formatNumber(dayAgg.count) : formatNumber(0)}
+          value={formatNumber(dayAgg.count)}
+        />
+        <StatCard
+          label={t("stats.todayHours")}
+          value={formatHours(dayAgg.totalMs)}
+        />
+        <StatCard
+          label={t("stats.todayRevenue")}
+          value={formatRevenue(dayAgg.revenueMinor)}
+          className="revenue"
         />
       </div>
-      <div className="box">
-        <h3>{t("day.historyTitle")}</h3>
-        {days.length === 0 ? (
-          <p className="sub">{t("day.emptyHistory")}</p>
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>{t("day.colDay")}</th>
-                  <th>{t("day.colOpened")}</th>
-                  <th>{t("day.colClosed")}</th>
-                  <th>{t("day.colDuration")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {days.map((d) => (
-                  <tr
-                    key={d.id}
-                    className={d.endedAtUtc === null ? "row-open" : undefined}
-                  >
-                    <td>#{d.id}</td>
-                    <td>
-                      {d.endedAtUtc === null && d.id === openDay?.id
-                        ? t("day.currentRow")
-                        : formatDateTimeLocal(d.startedAtUtc)}
-                    </td>
-                    <td>
-                      {d.endedAtUtc === null
-                        ? t("day.notClosed")
-                        : formatDateTimeLocal(d.endedAtUtc)}
-                    </td>
-                    <td className="n" dir="ltr">
-                      {liveHMS(d.startedAtUtc, d.endedAtUtc ?? now)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <button
+        type="button"
+        className="btn"
+        style={{ width: "100%" }}
+        disabled={busy}
+        onClick={onViewHistory}
+      >
+        {t("day.historyTitle")}
+      </button>
       {confirming && (
         <ConfirmDialog
           title={t("day.confirmCloseTitle")}

@@ -75,8 +75,8 @@ export async function completedSession(
 ): Promise<void> {
   const ended = startedAtUtc + durationMs;
   await db.execute(
-    "INSERT INTO rental_sessions(station_id, business_day_id, started_at_utc, ended_at_utc, duration_ms) VALUES (?, ?, ?, NULL, NULL)",
-    [stationId, dayId, startedAtUtc],
+    "INSERT INTO rental_sessions(station_id, business_day_id, started_at_utc, ended_at_utc, duration_ms, rate_minor_at_start) VALUES (?, ?, ?, NULL, NULL, ?)",
+    [stationId, dayId, startedAtUtc, 2500],
   );
   const active = await db.select<{ id: number }>(
     "SELECT id FROM rental_sessions WHERE station_id = ? AND ended_at_utc IS NULL LIMIT 1",

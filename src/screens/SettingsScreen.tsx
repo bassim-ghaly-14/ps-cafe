@@ -9,6 +9,7 @@ import {
   Power,
   PowerOff,
 } from "lucide-react";
+import { formatRateMajor } from "../domain/pricing";
 import ConfirmDialog from "../components/ConfirmDialog";
 import DeveloperSection from "../components/DeveloperSection";
 import type { CafeResult } from "../hooks/useCafe";
@@ -26,6 +27,7 @@ interface Props {
     color: string,
     visible: boolean,
     active: boolean,
+    hourlyRateMinor: string,
   ) => Promise<CafeResult>;
   setNotice: (n: { kind: "ok" | "err"; text: string } | null) => void;
   setBusy: (b: boolean) => void;
@@ -68,6 +70,7 @@ export default function SettingsScreen(props: Props) {
   const [color, setColor] = useState(PALETTE[0] ?? "#2ee6ff");
   const [visible, setVisible] = useState(true);
   const [active, setActive] = useState(true);
+  const [rate, setRate] = useState("0");
   const [confirmOff, setConfirmOff] = useState<Station | null>(null);
 
   const startEdit = (s: Station | null) => {
@@ -77,12 +80,14 @@ export default function SettingsScreen(props: Props) {
       setColor(PALETTE[stations.length % PALETTE.length] ?? "#2ee6ff");
       setVisible(true);
       setActive(true);
+      setRate("0");
     } else {
       setEditing(s.id);
       setName(s.name);
       setColor(s.colorHex);
       setVisible(s.isVisible);
       setActive(s.isActive);
+      setRate(formatRateMajor(s.hourlyRateMinor));
     }
   };
 
@@ -91,8 +96,12 @@ export default function SettingsScreen(props: Props) {
     setBusy(true);
     try {
       const id = editing === "new" ? null : editing;
-      const r = await onSave(id, name, color, visible, active);
-      setNotice({ kind: r.ok ? "ok" : "err", text: t(r.messageKey) });
+      const r = await onSave(id, name, color, visible, active, rate);
+      const params = r.params as Record<string, string> | undefined;
+      setNotice({
+        kind: r.ok ? "ok" : "err",
+        text: t(r.messageKey, params),
+      });
       if (r.ok) setEditing(null);
     } finally {
       setBusy(false);
@@ -119,6 +128,7 @@ export default function SettingsScreen(props: Props) {
         s.colorHex,
         next.visible,
         next.active,
+        formatRateMajor(s.hourlyRateMinor),
       );
       setNotice({ kind: r.ok ? "ok" : "err", text: t(r.messageKey) });
     } finally {
@@ -278,18 +288,38 @@ export default function SettingsScreen(props: Props) {
       {editing !== null && (
         <div className="box">
           <h3>{editing === "new" ? t("settings.add") : t("settings.edit")}</h3>
-          <label className="fld">
+          <label className="fld" htmlFor="station-name">
             <span>{t("settings.nameLabel")}</span>
             <input
+              id="station-name"
               type="text"
               value={name}
               maxLength={60}
               onChange={(e) => setName(e.target.value)}
             />
           </label>
-          <label className="fld">
+          <label className="fld" htmlFor="station-rate">
+            <span>{t("settings.rateLabel")}</span>
+            <input
+              id="station-rate"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              max={10000}
+              step="0.5"
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+              aria-describedby="rate-help"
+              dir="ltr"
+            />
+            <small id="rate-help" className="sub">
+              {t("settings.rateHelp")}
+            </small>
+          </label>
+          <label className="fld" htmlFor="station-color">
             <span>{t("settings.colorLabel")}</span>
             <input
+              id="station-color"
               type="color"
               value={color}
               onChange={(e) => setColor(e.target.value)}

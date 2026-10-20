@@ -18,6 +18,7 @@ erDiagram
     INTEGER sort_order
     INTEGER is_visible "0/1"
     INTEGER is_active "0/1 soft-delete"
+    INTEGER hourly_rate_minor ">= 0, 0 = unpriced (v2)"
     INTEGER created_at_utc
     INTEGER updated_at_utc
   }
@@ -28,6 +29,7 @@ erDiagram
     INTEGER started_at_utc
     INTEGER ended_at_utc "NULL = active"
     INTEGER duration_ms "NULL while active"
+    INTEGER rate_minor_at_start "hourly-rate snapshot at start (v2)"
   }
   app_settings {
     TEXT key PK
@@ -94,26 +96,43 @@ CREATE TABLE schema_meta(version INTEGER NOT NULL); -- single row, migration led
 - Clock skew: if `now < started_at_utc` (backward adjustment), clamp display to `00:00:00`
   and flag; do not write negative durations (CHECK prevents it; repo surfaces error).
 
-## 5. Statistics definitions (no billing)
+## 5. Statistics definitions
 - `total_closed_days = COUNT(*) WHERE ended_at IS NOT NULL`
 - `total_sessions = COUNT(*) in rental_sessions` (completed; active excluded unless labeled)
 - `total_rented_ms = SUM(duration_ms) WHERE ended_at IS NOT NULL`
 - `day_open_ms = (ended|now) - started_at` — distinct from `SUM(session duration)` for that day.
 - Current-day aggregates filtered by `business_day_id = <open day>`; all-time unfiltered.
 - Initial 4 cards (recommended): Closed Days · Total Sessions · Total Rented Hours · Current Day Time.
+- `revenue_minor` is defined in §7 (per-device hourly pricing) and is derived from each
+  session's own rate snapshot, never from the station's current rate.
 
 ## 6. Migrations
 Ordered integer versions in `db/migrations.ts`, each in a transaction, bumping `schema_meta`.
-v1 creates all tables above. Future: additive `ALTER TABLE` only; no destructive rewrites.
+v1 creates all tables above. v2 adds `stations.hourly_rate_minor` (default 0, unpriced) and
+`rental_sessions.rate_minor_at_start` (snapshot at session start; NULL = pre-pricing legacy).
+Additive `ALTER TABLE` only; no destructive rewrites.
 
-## 7. Restart recovery
+## 7. Per-device hourly pricing (v2)
+- `stations.hourly_rate_minor` is the configured hourly rate in minor currency units
+  (integer piasters, EGP). 0 means unpriced; existing stations default to 0 (never guessed).
+- `rental_sessions.rate_minor_at_start` snapshots the station's configured rate when a
+  session starts. It is immutable thereafter, so a price change never rewrites historical
+  revenue — a session is always billed at its own start-time snapshot.
+- Revenue is strictly proportional to elapsed time (billed to the second):
+    revenue = round(duration_ms * rate_minor_per_hour / 3_600_000)
+  No minimum charge, no rounding-up of partial hours, no grace period, no discounts,
+  no taxes. Revenue = amount attributable at the recorded rate, not a collected-payment
+  record. Legacy sessions with a NULL snapshot contribute time but not revenue
+  (honest about unavailable history).
+
+## 8. Restart recovery
 On launch: `SELECT * WHERE ended_at_utc IS NULL` for days; `SELECT ... WHERE ended_at_utc
 IS NULL` for sessions → restore live timers from stored `started_at_utc`. Crash-safe because
 every start is already a committed row; nothing lives only in memory.
 Rows with invalid start timestamps are excluded from live state (never deleted).
 See `docs/POST_RELEASE_HARDENING_REPORT.md` for the verified shutdown/power-loss behavior.
 
-## 8. Integrity risks → mitigations
+## 9. Integrity risks → mitigations
 Double-click start → pre-check + partial unique index returns constraint error, surfaced.
 Two open days → partial unique index + transactional open. Orphan session → FK + day id
 bound at start. Midnight rollover → no date logic at all. DB replaced on update →

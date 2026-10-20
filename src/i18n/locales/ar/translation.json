@@ -44,7 +44,9 @@
     "colClosed": "اتقفل",
     "colDuration": "مدة اليوم",
     "colSessions": "مرات التشغيل",
-    "colHours": "ساعات التأجير"
+    "colHours": "ساعات التأجير",
+    "colRevenue": "إجمالي الإيراد",
+    "backToDay": "رجوع ليوم العمل"
   },
   "stats": {
     "closedDays": "أيام العمل المقفولة",
@@ -52,7 +54,8 @@
     "totalHours": "ساعات التأجير",
     "currentDayTime": "مدة اليوم الحالي",
     "todaySessions": "تشغيلات اليوم الحالي",
-    "todayHours": "ساعات اليوم الحالي"
+    "todayHours": "ساعات اليوم الحالي",
+    "todayRevenue": "إيراد اليوم الحالي"
   },
   "stations": {
     "title": "الأجهزة",
@@ -83,6 +86,10 @@
     "deviceCount": "{{count}} جهاز",
     "namePlaceholder": "مثال: PS5 — جهاز 1",
     "nameLabel": "اسم الجهاز",
+    "rateLabel": "سعر الساعة (جنيه)",
+    "rateHelp": "سعر الساعة لهذا الجهاز بالجنيه. يُطبق على الجلسات الجديدة فقط ولا يغيّر إيراد الجلسات السابقة.",
+    "rateRequired": "سعر الساعة مطلوب — اكتب 0 إذا كان الجهاز بدون سعر.",
+    "rateInvalid": "سعر الساعة غير صالح — اكتب رقماً من 0 إلى 10000 بحد أقصى رقمين عشريين.",
     "colorLabel": "لون البطاقة",
     "visibleLabel": "ظاهر في شاشة الأجهزة",
     "activeLabel": "مفعّل (يمكن تشغيله)",
@@ -146,5 +153,45 @@
     "close": "إغلاق",
     "now": "الآن",
     "dash": "—"
+  },
+  "device": {
+    "back": "رجوع للأجهزة",
+    "notFoundTitle": "الجهاز غير موجود",
+    "notFoundBody": "ربما تم حذفه أو الرابط غير صحيح. ارجع لقائمة الأجهزة واختر جهازاً موجوداً.",
+    "loading": "جاري تحميل بيانات الجهاز…",
+    "statusRunning": "شغال الآن",
+    "statusIdle": "فاضي",
+    "statusHidden": "مخفي",
+    "statusInactive": "موقوف",
+    "rateLabel": "سعر الساعة",
+    "unpriced": "بدون سعر",
+    "startedAt": "بدأت في",
+    "elapsedNow": "المدة حتى الآن",
+    "liveRevenue": "إيراد الجلسة الحالية (تقديري)",
+    "kpiRevenue": "إجمالي الإيراد",
+    "kpiRevenueHint": "من {{count}} جلسة مسعّرة",
+    "kpiRevenueNoPriced": "لا توجد جلسات مسعّرة بعد",
+    "kpiTime": "إجمالي وقت التشغيل",
+    "kpiSessions": "الجلسات المكتملة",
+    "kpiAvg": "متوسط مدة الجلسة",
+    "todayTitle": "نشاط اليوم الحالي",
+    "todayRevenue": "إيراد اليوم",
+    "todayTime": "وقت اليوم",
+    "todaySessions": "جلسات اليوم",
+    "lastSession": "آخر جلسة مكتملة",
+    "historyTitle": "سجل الجلسات",
+    "historyEmpty": "لا توجد جلسات مسجلة لهذا الجهاز بعد.",
+    "colStart": "البداية",
+    "colEnd": "النهاية",
+    "colDuration": "المدة",
+    "colRate": "سعر الساعة",
+    "colRevenue": "الإيراد",
+    "runningNow": "شغالة الآن",
+    "unpricedShort": "—",
+    "legacyRevenue": "سعر غير مسجل",
+    "more": "عرض المزيد ({{remaining}})",
+    "partialHistory": "يُعرض {{shown}} من {{total}} جلسة — الأحدث أولاً.",
+    "start": "بدء",
+    "stop": "إغلاق"
   }
 }

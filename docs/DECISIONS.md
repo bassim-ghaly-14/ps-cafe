@@ -89,3 +89,24 @@ scenario seed) via `setDbOverride()`; every repository resolves through
 Consequence: demo edits can never contaminate production; production
 `npm run build` has no toggle. The PIN is an accidental-access barrier,
 not authentication — documented, never logged, no remote auth.
+
+## ADR-020 — Per-device hourly pricing + proportional revenue (supersedes ADR-009)
+Context: business owner wants per-device hourly rate and device-level revenue
+history; ADR-009 excluded billing fields in v1. Adding pricing now is additive
+and backward-compatible.
+Decision:
+- Schema v2: `stations.hourly_rate_minor INTEGER NOT NULL DEFAULT 0` (0 = unpriced,
+  never guessed) + `rental_sessions.rate_minor_at_start INTEGER NULL`
+  (NULL = pre-pricing legacy).
+- Start snapshots `stations.hourly_rate_minor` into `rate_minor_at_start`;
+  snapshot is immutable — later rate edits never touch prior sessions.
+- Revenue = round(duration_ms * rate_minor_at_start / 3_600_000), billed to the
+  second, proportional. No minimum charge, no rounding-up of partial hours, no
+  grace period, no discounts, no taxes (none exist in v1). Revenue is amount
+  attributable at the recorded rate, not collected payment.
+- Integer minor units only; no float arithmetic. Legacy NULL-snapshot sessions
+  count toward time/session totals but NOT revenue (honest about unavailable
+  history).
+Consequence: old sessions remain at old rate; price changes are prospective only;
+device details page shows revenue/operating-time/session count scoped to one
+station id; running session is billed at its start snapshot.

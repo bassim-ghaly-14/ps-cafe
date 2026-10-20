@@ -52,8 +52,8 @@ async function hideAllStations(db: DbPort): Promise<void> {
   const ids = await stationIds(db);
   for (const id of ids) {
     await db.execute(
-      "UPDATE stations SET name = ?, color_hex = ?, is_visible = ?, is_active = ?, updated_at_utc = ? WHERE id = ?",
-      [`station-${id}`, "#2ee6ff", 0, 0, Date.now(), id],
+      "UPDATE stations SET name = ?, color_hex = ?, is_visible = ?, is_active = ?, hourly_rate_minor = ?, updated_at_utc = ? WHERE id = ?",
+      [`station-${id}`, "#2ee6ff", 0, 0, 0, Date.now(), id],
     );
   }
 }
@@ -104,8 +104,8 @@ async function startDemoSessions(
       );
     }
     await db.execute(
-      "INSERT INTO rental_sessions(station_id, business_day_id, started_at_utc, ended_at_utc, duration_ms) VALUES (?, ?, ?, NULL, NULL)",
-      [sid, dayId, nowUtc - (ageMin[k] ?? 10) * MIN_MS],
+      "INSERT INTO rental_sessions(station_id, business_day_id, started_at_utc, ended_at_utc, duration_ms, rate_minor_at_start) VALUES (?, ?, ?, NULL, NULL, ?)",
+      [sid, dayId, nowUtc - (ageMin[k] ?? 10) * MIN_MS, 2500],
     );
   }
 }
