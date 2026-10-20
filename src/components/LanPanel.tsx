@@ -8,8 +8,10 @@ import LanPairView from "./LanPairView";
 
 export default function LanPanel({
   setNotice,
+  onStatusChange,
 }: {
   setNotice: (n: { kind: "ok" | "err"; text: string } | null) => void;
+  onStatusChange?: (s: LanStatus) => void;
 }) {
   const { t } = useTranslation();
   const [status, setStatus] = useState<LanStatus | null>(null);
@@ -39,10 +41,11 @@ export default function LanPanel({
         setStatus(s);
         setPairing(null);
       }
+      onStatusChange?.(s);
     } catch (e) {
       fail(e);
     }
-  }, [fail]);
+  }, [fail, onStatusChange]);
 
   useEffect(() => {
     if (isLanClient()) return;
@@ -56,6 +59,7 @@ export default function LanPanel({
       setStatus(s);
       setPairing(null);
     }
+    onStatusChange?.(s);
   };
 
   return (

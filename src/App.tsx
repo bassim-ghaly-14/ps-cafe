@@ -349,6 +349,10 @@ export default function App() {
                 onDemoEnter={handleDemoEnter}
                 onDemoReseed={handleDemoReseed}
                 onDemoExit={handleDemoExit}
+                onResetDone={async () => {
+                  localStorage.removeItem(ACTIVE_TAB_KEY);
+                  await data.refresh();
+                }}
               />
             )}
           </>

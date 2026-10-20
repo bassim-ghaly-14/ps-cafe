@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Eye,
@@ -11,12 +11,14 @@ import {
 } from "lucide-react";
 import { formatRateMajor } from "../domain/pricing";
 import ConfirmDialog from "../components/ConfirmDialog";
+import DatabaseResetSection from "../components/DatabaseResetSection";
 import DeveloperSection from "../components/DeveloperSection";
 import LanPanel from "../components/LanPanel";
 import { isLanClient } from "../db/client";
 import type { CafeResult } from "../hooks/useCafe";
 import type { RentalSession, Station } from "../domain/types";
 import type { DemoScenarioId } from "../dev/demoMode";
+import type { LanStatus } from "../lan/bridge";
 
 interface Props {
   stations: Station[];
@@ -43,6 +45,7 @@ interface Props {
     scenario: DemoScenarioId,
   ) => Promise<{ ok: boolean; error?: string }>;
   onDemoExit: () => Promise<void>;
+  onResetDone: () => Promise<void>;
 }
 
 const PALETTE = [
@@ -65,6 +68,7 @@ export default function SettingsScreen(props: Props) {
     onDemoEnter,
     onDemoReseed,
     onDemoExit,
+    onResetDone,
   } = props;
   const { t } = useTranslation();
   const [editing, setEditing] = useState<number | "new" | null>(null);
@@ -74,6 +78,11 @@ export default function SettingsScreen(props: Props) {
   const [active, setActive] = useState(true);
   const [rate, setRate] = useState("0");
   const [confirmOff, setConfirmOff] = useState<Station | null>(null);
+  const [lanRunning, setLanRunning] = useState(false);
+  const onLanStatus = useCallback(
+    (s: LanStatus) => setLanRunning(s.running),
+    [],
+  );
 
   const startEdit = (s: Station | null) => {
     if (s === null) {
@@ -148,143 +157,177 @@ export default function SettingsScreen(props: Props) {
   };
 
   const body = (
-    <section className="settings-section" aria-label={t("nav.settings")}>
-      {notice && (
-        <p
-          className={notice.kind === "ok" ? "notice ok" : "notice err"}
-          role="status"
-        >
-          {notice.text}
-        </p>
-      )}
-      <div className="box">
-        <h3>{t("settings.cardsTitle")}</h3>
-        {/* Column labels mirror the station row cells exactly:
-            swatch | name | active status | actions. */}
-        <div className="settings-station-row head">
-          <span />
-          <span className="h">{t("settings.colName")}</span>
-          <span className="h hide-sm">{t("settings.colActive")}</span>
-          <span className="h">{t("settings.colActions")}</span>
+    <>
+      <section className="settings-section" aria-label={t("nav.settings")}>
+        {notice && (
+          <p
+            className={notice.kind === "ok" ? "notice ok" : "notice err"}
+            role="status"
+          >
+            {notice.text}
+          </p>
+        )}
+        <div className="box" aria-labelledby="settings-general-title">
+          <h3 id="settings-general-title">{t("settings.generalTitle")}</h3>
+          <p className="sub">{t("settings.generalNote")}</p>
         </div>
-        {stations.map((s) => (
-          <div className="settings-station-row" key={s.id}>
-            <span
-              className="sw"
-              style={{ background: s.colorHex }}
-              aria-hidden
-            />
-            <span className="set-name" title={s.name}>
-              {s.name}
-            </span>
-            <span className="set-meta sub hide-sm">
-              {s.isActive ? t("settings.activate") : t("settings.deactivate")}
-            </span>
-            <span className="set-ops settings-station-actions">
-              <button
-                type="button"
-                className="mini"
-                disabled={busy}
-                onClick={() => startEdit(s)}
-                aria-label={t("settings.edit")}
-                title={t("settings.edit")}
-              >
-                <Pencil size={14} aria-hidden />
-                <span>{t("settings.edit")}</span>
-              </button>
-              <button
-                type="button"
-                className="mini"
-                disabled={busy}
-                onClick={() =>
-                  quickSave(s, { visible: !s.isVisible, active: s.isActive })
-                }
-                aria-label={
-                  s.isVisible ? t("settings.hide") : t("settings.show")
-                }
-                title={s.isVisible ? t("settings.hide") : t("settings.show")}
-              >
-                {s.isVisible ? (
-                  <EyeOff size={14} aria-hidden />
-                ) : (
-                  <Eye size={14} aria-hidden />
-                )}
-                <span>
-                  {s.isVisible ? t("settings.hide") : t("settings.show")}
-                </span>
-              </button>
-              <button
-                type="button"
-                className="mini"
-                disabled={busy}
-                onClick={() => startEdit(s)}
-                aria-label={t("settings.changeColor")}
-                title={t("settings.changeColor")}
-              >
-                <Palette size={14} aria-hidden />
-                <span>{t("settings.changeColor")}</span>
-              </button>
-              <button
-                type="button"
-                className={`mini danger ${s.isActive ? "" : "ghost"}`}
-                disabled={busy}
-                onClick={() =>
-                  s.isActive
-                    ? requestDeactivate(s)
-                    : quickSave(s, { visible: s.isVisible, active: true })
-                }
-                aria-label={
-                  s.isActive ? t("settings.deactivate") : t("settings.activate")
-                }
-                title={
-                  s.isActive ? t("settings.deactivate") : t("settings.activate")
-                }
-              >
-                {s.isActive ? (
-                  <PowerOff size={14} aria-hidden />
-                ) : (
-                  <Power size={14} aria-hidden />
-                )}
-                <span>
-                  {s.isActive
-                    ? t("settings.deactivate")
-                    : t("settings.activate")}
-                </span>
-              </button>
+        <div className="box">
+          <h3>{t("settings.cardsTitle")}</h3>
+          {/* Column labels mirror the station row cells exactly:
+            swatch | name | active status | actions. */}
+          <div className="settings-station-row head">
+            <span />
+            <span className="h">{t("settings.colName")}</span>
+            <span className="h hide-sm">{t("settings.colActive")}</span>
+            <span className="h">{t("settings.colActions")}</span>
+          </div>
+          {stations.map((s) => (
+            <div className="settings-station-row" key={s.id}>
+              <span
+                className="sw"
+                style={{ background: s.colorHex }}
+                aria-hidden
+              />
+              <span className="set-name" title={s.name}>
+                {s.name}
+              </span>
+              <span className="set-meta sub hide-sm">
+                {s.isActive ? t("settings.activate") : t("settings.deactivate")}
+              </span>
+              <span className="set-ops settings-station-actions">
+                <button
+                  type="button"
+                  className="mini"
+                  disabled={busy}
+                  onClick={() => startEdit(s)}
+                  aria-label={t("settings.edit")}
+                  title={t("settings.edit")}
+                >
+                  <Pencil size={14} aria-hidden />
+                  <span>{t("settings.edit")}</span>
+                </button>
+                <button
+                  type="button"
+                  className="mini"
+                  disabled={busy}
+                  onClick={() =>
+                    quickSave(s, { visible: !s.isVisible, active: s.isActive })
+                  }
+                  aria-label={
+                    s.isVisible ? t("settings.hide") : t("settings.show")
+                  }
+                  title={s.isVisible ? t("settings.hide") : t("settings.show")}
+                >
+                  {s.isVisible ? (
+                    <EyeOff size={14} aria-hidden />
+                  ) : (
+                    <Eye size={14} aria-hidden />
+                  )}
+                  <span>
+                    {s.isVisible ? t("settings.hide") : t("settings.show")}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="mini"
+                  disabled={busy}
+                  onClick={() => startEdit(s)}
+                  aria-label={t("settings.changeColor")}
+                  title={t("settings.changeColor")}
+                >
+                  <Palette size={14} aria-hidden />
+                  <span>{t("settings.changeColor")}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`mini danger ${s.isActive ? "" : "ghost"}`}
+                  disabled={busy}
+                  onClick={() =>
+                    s.isActive
+                      ? requestDeactivate(s)
+                      : quickSave(s, { visible: s.isVisible, active: true })
+                  }
+                  aria-label={
+                    s.isActive
+                      ? t("settings.deactivate")
+                      : t("settings.activate")
+                  }
+                  title={
+                    s.isActive
+                      ? t("settings.deactivate")
+                      : t("settings.activate")
+                  }
+                >
+                  {s.isActive ? (
+                    <PowerOff size={14} aria-hidden />
+                  ) : (
+                    <Power size={14} aria-hidden />
+                  )}
+                  <span>
+                    {s.isActive
+                      ? t("settings.deactivate")
+                      : t("settings.activate")}
+                  </span>
+                </button>
+              </span>
+            </div>
+          ))}
+          <div className="row2">
+            <button
+              type="button"
+              className="btn ghost"
+              disabled={busy}
+              onClick={() => startEdit(null)}
+            >
+              <Plus size={16} aria-hidden />
+              <span>{t("settings.add")}</span>
+            </button>
+            <span className="sub">
+              {t("settings.deviceCount", { count: stations.length })}
             </span>
           </div>
-        ))}
-        <div className="row2">
-          <button
-            type="button"
-            className="btn ghost"
-            disabled={busy}
-            onClick={() => startEdit(null)}
-          >
-            <Plus size={16} aria-hidden />
-            <span>{t("settings.add")}</span>
-          </button>
-          <span className="sub">
-            {t("settings.deviceCount", { count: stations.length })}
-          </span>
+          <p className="sub" style={{ marginTop: 8 }}>
+            {t("settings.note")}
+          </p>
         </div>
-        <p className="sub" style={{ marginTop: 8 }}>
-          {t("settings.note")}
-        </p>
-      </div>
-      <LanPanel setNotice={setNotice} />
+      </section>
+      <section
+        className="settings-section"
+        aria-label={t("settings.lanSectionTitle")}
+      >
+        <LanPanel setNotice={setNotice} onStatusChange={onLanStatus} />
+      </section>
       {!isLanClient() && (
-        <DeveloperSection
-          demoActive={demoActive}
-          demoScenario={demoScenario}
-          demoError={demoError}
-          busy={busy}
-          onEnter={onDemoEnter}
-          onReseed={onDemoReseed}
-          onExit={onDemoExit}
-        />
+        <section
+          className="settings-section"
+          aria-label={t("settings.devSectionTitle")}
+        >
+          <DeveloperSection
+            demoActive={demoActive}
+            demoScenario={demoScenario}
+            demoError={demoError}
+            busy={busy}
+            onEnter={onDemoEnter}
+            onReseed={onDemoReseed}
+            onExit={onDemoExit}
+          />
+        </section>
       )}
-    </section>
+      {!isLanClient() && (
+        <section
+          className="settings-section"
+          aria-label={t("settings.resetSectionTitle")}
+        >
+          <DatabaseResetSection
+            busy={busy}
+            setNotice={setNotice}
+            lanRunning={lanRunning}
+            demoActive={demoActive}
+            onResetDone={onResetDone}
+          />
+        </section>
+      )}
+    </>
   );
 
   if (editing === null && confirmOff === null) return body;

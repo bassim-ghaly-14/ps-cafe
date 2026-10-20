@@ -242,6 +242,62 @@ export function createMemoryPort(options: MemoryPortOptions = {}): DbPort {
     return value;
   }
 
+  function deleteAllFrom(
+    table: "business_days" | "stations" | "rental_sessions",
+  ): void {
+    tables[table].length = 0;
+    persist();
+  }
+
+  function insertStationWithId(params: unknown[]): void {
+    const id = getNumericParam(params, 0);
+    if (tables.stations.some((row) => row["id"] === id)) return;
+    const name = getStringParam(params, 1);
+    validateStationName(name);
+    if (id > seqStation) seqStation = id;
+    tables.stations.push({
+      id,
+      name,
+      color_hex: getStringParam(params, 2),
+      sort_order: getNumericParam(params, 3),
+      is_visible: getFlagParam(params, 4),
+      is_active: getFlagParam(params, 5),
+      hourly_rate_minor: getRateParam(params, 6),
+      created_at_utc: getNumericParam(params, 7),
+      updated_at_utc: getNumericParam(params, 8),
+    });
+    persist();
+  }
+
+  function insertBusinessDayWithId(params: unknown[]): void {
+    const id = getNumericParam(params, 0);
+    if (tables.business_days.some((row) => row["id"] === id)) return;
+    if (id > seqDay) seqDay = id;
+    tables.business_days.push({
+      id,
+      started_at_utc: getNumericParam(params, 1),
+      ended_at_utc: params[2] as number | null,
+      created_at_utc: getNumericParam(params, 3),
+    });
+    persist();
+  }
+
+  function insertSessionWithId(params: unknown[]): void {
+    const id = getNumericParam(params, 0);
+    if (tables.rental_sessions.some((row) => row["id"] === id)) return;
+    if (id > seqSession) seqSession = id;
+    tables.rental_sessions.push({
+      id,
+      station_id: getNumericParam(params, 1),
+      business_day_id: getNumericParam(params, 2),
+      started_at_utc: getNumericParam(params, 3),
+      ended_at_utc: params[4] as number | null,
+      duration_ms: params[5] as number | null,
+      rate_minor_at_start: params[6] as number | null,
+    });
+    persist();
+  }
+
   function insertStation(params: unknown[]): void {
     const name = getStringParam(params, 0);
     validateStationName(name);
@@ -419,6 +475,10 @@ export function createMemoryPort(options: MemoryPortOptions = {}): DbPort {
     }
 
     if (query.startsWith("insert into business_days")) {
+      if (query.includes("(id, started_at_utc,")) {
+        insertBusinessDayWithId(params);
+        return;
+      }
       insertBusinessDay(params);
       return;
     }
@@ -439,7 +499,42 @@ export function createMemoryPort(options: MemoryPortOptions = {}): DbPort {
     }
 
     if (query.startsWith("insert into rental_sessions")) {
+      // Snapshot restore carries an explicit id (9 params); normal
+      // production inserts do not.
+      if (query.includes("(id, station_id,")) {
+        insertSessionWithId(params);
+        return;
+      }
       insertRentalSession(params);
+      return;
+    }
+
+    if (
+      query.startsWith("delete from rental_sessions") &&
+      !query.includes("where")
+    ) {
+      deleteAllFrom("rental_sessions");
+      return;
+    }
+
+    if (
+      query.startsWith("delete from business_days") &&
+      !query.includes("where")
+    ) {
+      deleteAllFrom("business_days");
+      return;
+    }
+
+    if (query.startsWith("delete from stations") && !query.includes("where")) {
+      deleteAllFrom("stations");
+      return;
+    }
+
+    if (
+      query.startsWith("insert into stations") &&
+      query.includes("(id, name,")
+    ) {
+      insertStationWithId(params);
       return;
     }
 
@@ -556,6 +651,18 @@ export function createMemoryPort(options: MemoryPortOptions = {}): DbPort {
           .filter((row) => row["id"] === num(0))
           .map((row) => ({ ...row })),
       );
+    }
+
+    if (query === "select * from rental_sessions") {
+      return rows(tables.rental_sessions.map((row) => ({ ...row })));
+    }
+
+    if (query === "select * from business_days") {
+      return rows(tables.business_days.map((row) => ({ ...row })));
+    }
+
+    if (query === "select * from stations") {
+      return rows(tables.stations.map((row) => ({ ...row })));
     }
 
     if (query.includes("from stations where is_active")) {

@@ -234,3 +234,12 @@ async function seedDefaultStations(db: DbPort): Promise<void> {
     );
   }
 }
+
+/**
+ * Reseed required defaults after a destructive reset, using the same
+ * first-run init logic. Exported for the reset service only.
+ */
+export async function seedDefaultsForReset(): Promise<void> {
+  const db = await getActiveDb();
+  await seedDefaultStations(db);
+}

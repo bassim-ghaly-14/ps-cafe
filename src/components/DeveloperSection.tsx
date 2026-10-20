@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Code2,
@@ -55,7 +55,14 @@ export default function DeveloperSection(props: Props) {
   );
   const [confirmReset, setConfirmReset] = useState(false);
 
-  if (!isDevtoolsEnabled()) return null;
+  // Keep the local scenario selector in sync with the actual active
+  // scenario so reopening Settings always shows the true current state
+  // instead of a stale initial value.
+  useEffect(() => {
+    if (demoScenario !== null) setScenario(demoScenario);
+  }, [demoScenario]);
+
+  const devtoolsEnabled = isDevtoolsEnabled();
 
   const requestEnable = () => {
     setPinError(null);
@@ -72,6 +79,12 @@ export default function DeveloperSection(props: Props) {
     const r = await onEnter(scenario);
     if (!r.ok) setPinError(r.error ?? t("common.error"));
   };
+
+  // Compile-time gate (dev / internal builds only): hooks above stay
+  // unconditional so Rules-of-Hooks order never shifts between builds.
+  // Production Windows builds keep this section compiled out by design
+  // (ADR-016) — never bypass this check to force the toggle visible.
+  if (!devtoolsEnabled) return null;
 
   return (
     <div className="box dev-box">
