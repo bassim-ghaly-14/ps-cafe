@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp } from "lucide-react";
 import {
   compareTimestamps,
   compareNullableNumber,
-  nextSort,
+  nextSortCycle,
   type SortDirection,
 } from "../utils/sort";
 import {
@@ -42,10 +42,9 @@ type HistorySortKey =
   | "hours"
   | "revenue";
 
-const INITIAL_SORT: { key: HistorySortKey; dir: SortDirection } = {
-  key: "startedAt",
-  dir: "desc",
-};
+// `null` = unsorted = genuine default (server order: newest-first from
+// businessDayRepo.listDays). Cycle per column: null -> asc -> desc -> null
+// via nextSortCycle, so a third click restores the server default.
 
 /**
  * Full workday history page. Every metric is scoped to its own workday id
@@ -60,10 +59,12 @@ export default function HistoryScreen({
 }: Props) {
   const { t } = useTranslation();
   const now = useNow(openDay !== null);
+  // null = unsorted = genuine default (source order, newest-first from
+  // businessDayRepo.listDays). Cycle per column: null -> asc -> desc -> null.
   const [sort, setSort] = useState<{
     key: HistorySortKey;
     dir: SortDirection;
-  } | null>(INITIAL_SORT);
+  } | null>(null);
 
   const sortedDays = useMemo(() => {
     if (!sort) return [...days];
@@ -134,67 +135,75 @@ export default function HistoryScreen({
           <table>
             <thead>
               <tr>
-                <th>
+                <th aria-sort={ariaSort("id", sort)}>
                   <SortHeader
-                    key="id"
+                    columnKey="id"
                     label={t("day.colDay")}
                     sort={sort}
                     onSort={setSort}
-                    initialDir="desc"
+                    initialDir="asc"
                   />
                 </th>
-                <th>
+                <th aria-sort={ariaSort("startedAt", sort)}>
                   <SortHeader
-                    key="startedAt"
+                    columnKey="startedAt"
                     label={t("day.colOpened")}
                     sort={sort}
                     onSort={setSort}
-                    initialDir="desc"
+                    initialDir="asc"
                   />
                 </th>
-                <th>
+                <th aria-sort={ariaSort("endedAt", sort)}>
                   <SortHeader
-                    key="endedAt"
+                    columnKey="endedAt"
                     label={t("day.colClosed")}
                     sort={sort}
                     onSort={setSort}
-                    initialDir="desc"
+                    initialDir="asc"
                   />
                 </th>
-                <th className="n" dir="ltr">
+                <th
+                  className="n"
+                  dir="ltr"
+                  aria-sort={ariaSort("duration", sort)}
+                >
                   <SortHeader
-                    key="duration"
+                    columnKey="duration"
                     label={t("day.colDuration")}
                     sort={sort}
                     onSort={setSort}
-                    initialDir="desc"
+                    initialDir="asc"
                   />
                 </th>
-                <th className="n" dir="ltr">
+                <th
+                  className="n"
+                  dir="ltr"
+                  aria-sort={ariaSort("sessions", sort)}
+                >
                   <SortHeader
-                    key="sessions"
+                    columnKey="sessions"
                     label={t("day.colSessions")}
                     sort={sort}
                     onSort={setSort}
-                    initialDir="desc"
+                    initialDir="asc"
                   />
                 </th>
-                <th className="n" dir="ltr">
+                <th className="n" dir="ltr" aria-sort={ariaSort("hours", sort)}>
                   <SortHeader
-                    key="hours"
+                    columnKey="hours"
                     label={t("day.colHours")}
                     sort={sort}
                     onSort={setSort}
-                    initialDir="desc"
+                    initialDir="asc"
                   />
                 </th>
-                <th className="n">
+                <th className="n" aria-sort={ariaSort("revenue", sort)}>
                   <SortHeader
-                    key="revenue"
+                    columnKey="revenue"
                     label={t("day.colRevenue")}
                     sort={sort}
                     onSort={setSort}
-                    initialDir="desc"
+                    initialDir="asc"
                   />
                 </th>
               </tr>
@@ -254,27 +263,37 @@ export default function HistoryScreen({
   );
 }
 
+function ariaSort(
+  columnKey: HistorySortKey,
+  sort: { key: HistorySortKey; dir: SortDirection } | null,
+): "ascending" | "descending" | "none" {
+  if (sort?.key !== columnKey) return "none";
+  return sort.dir === "asc" ? "ascending" : "descending";
+}
+
+// NOTE: the sortable-column prop is named `columnKey` (not `key`): React
+// strips `key` before it reaches the component, which is the regression
+// that made every header click a no-op (key arrived as undefined).
 function SortHeader({
-  key,
+  columnKey,
   label,
   sort,
   onSort,
   initialDir,
 }: {
-  key: HistorySortKey;
+  columnKey: HistorySortKey;
   label: string;
   sort: { key: HistorySortKey; dir: SortDirection } | null;
-  onSort: (s: { key: HistorySortKey; dir: SortDirection }) => void;
+  onSort: (s: { key: HistorySortKey; dir: SortDirection } | null) => void;
   initialDir: SortDirection;
 }) {
-  const active = sort?.key === key;
+  const active = sort?.key === columnKey;
   const dir = active ? sort.dir : null;
   return (
     <button
       type="button"
       className="sort-header"
-      onClick={() => onSort(nextSort(sort, key, initialDir))}
-      aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
+      onClick={() => onSort(nextSortCycle(sort, columnKey, initialDir))}
       aria-label={`${label} ${active ? (dir === "asc" ? "sorted ascending" : "sorted descending") : "sortable"}`}
     >
       <span className="sort-label">{label}</span>

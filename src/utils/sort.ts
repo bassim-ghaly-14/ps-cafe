@@ -93,3 +93,26 @@ export function nextSort<K extends string>(
   }
   return { key: clicked, dir: initialDir };
 }
+
+/**
+ * Three-state cycle: unsorted -> initial -> opposite -> unsorted.
+ * Same column advances through the cycle; a different column starts at
+ * its initial direction. Returning `null` restores the table's genuine
+ * default ordering (source / server order).
+ */
+export function nextSortCycle<K extends string>(
+  current: { key: K; dir: SortDirection } | null,
+  clicked: K,
+  initialDir: SortDirection,
+): { key: K; dir: SortDirection } | null {
+  if (!current || current.key !== clicked) {
+    return { key: clicked, dir: initialDir };
+  }
+  if (current.dir === initialDir) {
+    return {
+      key: clicked,
+      dir: initialDir === "asc" ? "desc" : "asc",
+    };
+  }
+  return null;
+}

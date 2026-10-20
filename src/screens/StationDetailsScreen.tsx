@@ -5,7 +5,7 @@ import StatCard from "../components/StatCard";
 import { useNow } from "../hooks/useNow";
 import { formatRateMajor, sessionRevenueMinor } from "../domain/pricing";
 import { elapsedMs, formatHMS } from "../utils/time";
-import { nextSort, type SortDirection } from "../utils/sort";
+import { nextSortCycle, type SortDirection } from "../utils/sort";
 import {
   formatDateTimeLocal,
   formatHours,
@@ -67,15 +67,23 @@ export default function StationDetailsScreen(props: Props) {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [busy, setBusy] = useState(false);
   const now = useNow(true);
+  type SessionSortKey = "startedAt" | "endedAt" | "duration" | "rate";
+  // null = unsorted = genuine default (server default: startedAt desc).
+  // Cycle per column: null -> asc -> desc -> null via nextSortCycle.
   const [sort, setSort] = useState<{
-    key: "startedAt" | "endedAt" | "duration" | "rate";
+    key: SessionSortKey;
     dir: SortDirection;
-  } | null>({
-    key: "startedAt",
-    dir: "desc",
-  });
+  } | null>(null);
 
-  const load = async (id: number, limit: number) => {
+  const load = async (
+    id: number,
+    limit: number,
+    sortOverride?: { key: SessionSortKey; dir: SortDirection } | null,
+  ) => {
+    // Read sort from the explicit argument when provided: setState is async,
+    // so reading `sort` directly here would use the stale pre-click value
+    // and the refetch would return rows in the previous order.
+    const effective = sortOverride !== undefined ? sortOverride : sort;
     try {
       const station = await getStation(id);
       if (!station) {
@@ -89,8 +97,8 @@ export default function StationDetailsScreen(props: Props) {
           id,
           limit,
           0,
-          sort?.key ?? "startedAt",
-          sort?.dir ?? "desc",
+          effective?.key ?? "startedAt",
+          effective?.dir ?? "desc",
         ),
       ]);
       setState({
@@ -111,14 +119,20 @@ export default function StationDetailsScreen(props: Props) {
 
   useEffect(() => {
     setState({ kind: "loading" });
-    void load(stationId, PAGE_SIZE);
+    void load(stationId, PAGE_SIZE, null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stationId]);
 
-  useEffect(() => {
-    void load(stationId, PAGE_SIZE);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sort]);
+  const handleSort = (
+    next: { key: SessionSortKey; dir: SortDirection } | null,
+  ) => {
+    setSort(next);
+    // Reset to the first page on every sort change so the user never stays
+    // on a stale offset, and pass `next` explicitly so the refetch uses the
+    // new sort instead of the stale pre-click state.
+    setState({ kind: "loading" });
+    void load(stationId, PAGE_SIZE, next);
+  };
 
   const refresh = () => load(stationId, shownCount(state));
 
@@ -346,40 +360,48 @@ export default function StationDetailsScreen(props: Props) {
               <table>
                 <thead>
                   <tr>
-                    <th>
+                    <th aria-sort={sessionAriaSort("startedAt", sort)}>
                       <SessionSortHeader
-                        key="startedAt"
+                        columnKey="startedAt"
                         label={t("device.colStart")}
                         sort={sort}
-                        onSort={setSort}
-                        initialDir="desc"
+                        onSort={handleSort}
+                        initialDir="asc"
                       />
                     </th>
-                    <th>
+                    <th aria-sort={sessionAriaSort("endedAt", sort)}>
                       <SessionSortHeader
-                        key="endedAt"
+                        columnKey="endedAt"
                         label={t("device.colEnd")}
                         sort={sort}
-                        onSort={setSort}
-                        initialDir="desc"
+                        onSort={handleSort}
+                        initialDir="asc"
                       />
                     </th>
-                    <th className="n" dir="ltr">
+                    <th
+                      className="n"
+                      dir="ltr"
+                      aria-sort={sessionAriaSort("duration", sort)}
+                    >
                       <SessionSortHeader
-                        key="duration"
+                        columnKey="duration"
                         label={t("device.colDuration")}
                         sort={sort}
-                        onSort={setSort}
-                        initialDir="desc"
+                        onSort={handleSort}
+                        initialDir="asc"
                       />
                     </th>
-                    <th className="n" dir="ltr">
+                    <th
+                      className="n"
+                      dir="ltr"
+                      aria-sort={sessionAriaSort("rate", sort)}
+                    >
                       <SessionSortHeader
-                        key="rate"
+                        columnKey="rate"
                         label={t("device.colRate")}
                         sort={sort}
-                        onSort={setSort}
-                        initialDir="desc"
+                        onSort={handleSort}
+                        initialDir="asc"
                       />
                     </th>
                     <th className="n">{t("device.colRevenue")}</th>
@@ -440,33 +462,48 @@ export default function StationDetailsScreen(props: Props) {
   );
 }
 
+function sessionAriaSort(
+  columnKey: "startedAt" | "endedAt" | "duration" | "rate",
+  sort: {
+    key: "startedAt" | "endedAt" | "duration" | "rate";
+    dir: SortDirection;
+  } | null,
+): "ascending" | "descending" | "none" {
+  if (sort?.key !== columnKey) return "none";
+  return sort.dir === "asc" ? "ascending" : "descending";
+}
+
+// NOTE: the sortable-column prop is named `columnKey` (not `key`): React
+// strips `key` before it reaches the component, which is the regression
+// that made every header click a no-op (key arrived as undefined).
 function SessionSortHeader({
-  key,
+  columnKey,
   label,
   sort,
   onSort,
   initialDir,
 }: {
-  key: "startedAt" | "endedAt" | "duration" | "rate";
+  columnKey: "startedAt" | "endedAt" | "duration" | "rate";
   label: string;
   sort: {
     key: "startedAt" | "endedAt" | "duration" | "rate";
     dir: SortDirection;
   } | null;
-  onSort: (s: {
-    key: "startedAt" | "endedAt" | "duration" | "rate";
-    dir: SortDirection;
-  }) => void;
+  onSort: (
+    s: {
+      key: "startedAt" | "endedAt" | "duration" | "rate";
+      dir: SortDirection;
+    } | null,
+  ) => void;
   initialDir: SortDirection;
 }) {
-  const active = sort?.key === key;
+  const active = sort?.key === columnKey;
   const dir = active ? sort.dir : null;
   return (
     <button
       type="button"
       className="sort-header"
-      onClick={() => onSort(nextSort(sort, key, initialDir))}
-      aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
+      onClick={() => onSort(nextSortCycle(sort, columnKey, initialDir))}
       aria-label={`${label} ${active ? (dir === "asc" ? "sorted ascending" : "sorted descending") : "sortable"}`}
     >
       <span className="sort-label">{label}</span>

@@ -921,12 +921,11 @@ input:focus-visible,
   border-radius: 3px;
 }
 
-.sort-header[aria-sort="none"] {
+th[aria-sort="none"] .sort-header {
   color: var(--mute);
-  cursor: default;
 }
 
-.sort-header[aria-sort="none"]:hover {
+th[aria-sort="none"] .sort-header:hover {
   opacity: 1;
 }
 

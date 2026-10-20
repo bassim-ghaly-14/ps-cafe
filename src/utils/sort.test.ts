@@ -4,6 +4,7 @@ import {
   compareNullableText,
   compareTimestamps,
   nextSort,
+  nextSortCycle,
   type SortDirection,
 } from "./sort";
 
@@ -136,5 +137,129 @@ describe("nextSort", () => {
     };
     const result = nextSort(current, "date", "desc");
     expect(result).toEqual({ key: "date", dir: "desc" });
+  });
+});
+
+describe("nextSortCycle (three-state: null -> asc -> desc -> null)", () => {
+  it("starts ascending on a new column", () => {
+    expect(nextSortCycle(null, "revenue", "asc")).toEqual({
+      key: "revenue",
+      dir: "asc",
+    });
+  });
+
+  it("cycles asc -> desc -> unsorted on repeated clicks", () => {
+    const asc = nextSortCycle(null, "revenue", "asc");
+    expect(asc).toEqual({ key: "revenue", dir: "asc" });
+    const desc = nextSortCycle(asc, "revenue", "asc");
+    expect(desc).toEqual({ key: "revenue", dir: "desc" });
+    expect(nextSortCycle(desc, "revenue", "asc")).toBeNull();
+  });
+
+  it("switching columns restarts at ascending", () => {
+    const current = { key: "revenue", dir: "desc" } as {
+      key: string;
+      dir: SortDirection;
+    };
+    expect(nextSortCycle(current, "sessions", "asc")).toEqual({
+      key: "sessions",
+      dir: "asc",
+    });
+  });
+});
+
+describe("sorting pipeline semantics", () => {
+  it("sorts 2, 10, 100 numerically (not lexicographically)", () => {
+    const rows = [{ v: 100 }, { v: 2 }, { v: 10 }];
+    const asc = [...rows].sort((a, b) =>
+      compareNullableNumber(a.v, b.v, "asc"),
+    );
+    expect(asc.map((r) => r.v)).toEqual([2, 10, 100]);
+  });
+
+  it("sorts decimals and monetary minor-units numerically", () => {
+    const rows = [{ v: 1999 }, { v: 200 }, { v: 20000 }, { v: 1050 }];
+    const asc = [...rows].sort((a, b) =>
+      compareNullableNumber(a.v, b.v, "asc"),
+    );
+    expect(asc.map((r) => r.v)).toEqual([200, 1050, 1999, 20000]);
+    const floats = [{ v: 1.5 }, { v: 1.25 }, { v: 10.1 }, { v: 2.75 }];
+    expect(
+      [...floats]
+        .sort((a, b) => compareNullableNumber(a.v, b.v, "asc"))
+        .map((r) => r.v),
+    ).toEqual([1.25, 1.5, 2.75, 10.1]);
+  });
+
+  it("sorts dates by timestamp, not display string", () => {
+    const rows = [
+      { ts: 1_700_000_000_000 + 80_000_000, label: "9:30 AM" },
+      { ts: 1_700_000_000_000, label: "10:00 PM" },
+    ];
+    const asc = [...rows].sort((a, b) => compareTimestamps(a.ts, b.ts, "asc"));
+    expect(asc.map((r) => r.label)).toEqual(["10:00 PM", "9:30 AM"]);
+  });
+
+  it("keeps missing values last in both directions", () => {
+    const nums = [5, null, 3, undefined, 9];
+    const ascNums = [...nums].sort((x, y) =>
+      compareNullableNumber(
+        x as number | null | undefined,
+        y as number | null | undefined,
+        "asc",
+      ),
+    );
+    expect(ascNums.slice(0, 3)).toEqual([3, 5, 9]);
+    const descNums = [...nums].sort((x, y) =>
+      compareNullableNumber(
+        x as number | null | undefined,
+        y as number | null | undefined,
+        "desc",
+      ),
+    );
+    expect(descNums.slice(0, 3)).toEqual([9, 5, 3]);
+  });
+
+  it("is stable: equal values keep their relative order", () => {
+    const rows = [
+      { id: 1, revenue: 100 },
+      { id: 2, revenue: 100 },
+      { id: 3, revenue: 50 },
+    ];
+    const asc = [...rows].sort((a, b) =>
+      compareNullableNumber(a.revenue, b.revenue, "asc"),
+    );
+    expect(asc.map((r) => r.id)).toEqual([3, 1, 2]);
+  });
+
+  it("does not mutate the source array", () => {
+    const rows = [{ v: 3 }, { v: 1 }, { v: 2 }];
+    const snapshot = rows.map((r) => ({ ...r }));
+    const sorted = [...rows].sort((a, b) =>
+      compareNullableNumber(a.v, b.v, "asc"),
+    );
+    expect(rows).toEqual(snapshot);
+    expect(sorted.map((r) => r.v)).toEqual([1, 2, 3]);
+  });
+
+  it("filter -> sort -> paginate pipeline reorders the visible page", () => {
+    const rows = [
+      { id: 1, name: "alpha", revenue: 300 },
+      { id: 2, name: "beta", revenue: 100 },
+      { id: 3, name: "alphabet", revenue: 200 },
+    ];
+    const filtered = rows.filter((r) => r.name.includes("alpha"));
+    const sorted = [...filtered].sort((a, b) =>
+      compareNullableNumber(a.revenue, b.revenue, "asc"),
+    );
+    expect(sorted.slice(0, 2).map((r) => r.id)).toEqual([3, 1]);
+  });
+
+  it("compares Arabic text consistently", () => {
+    const a = "القاهرة";
+    const b = "الجيزة";
+    const ascCmp = compareNullableText(a, b, "asc", "ar");
+    expect(ascCmp).not.toBe(0);
+    expect(compareNullableText(a, b, "desc", "ar")).toBe(-ascCmp);
   });
 });
