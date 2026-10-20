@@ -852,6 +852,7 @@ input:focus-visible,
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
+  margin: 12px 0;
   min-height: 44px;
   background: var(--panel);
   border: 1px solid var(--line);
