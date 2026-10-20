@@ -316,7 +316,7 @@ describe("developer mode availability", () => {
     }
   });
 
-  it("gates activation on the developer PIN (2214 rejected, 2214 accepted)", async () => {
+  it("gates activation on the developer PIN (1422 rejected, 2214 accepted)", async () => {
     await renderReadyApp();
     fireEvent.click(screen.getByRole("button", { name: "الإعدادات" }));
     await waitFor(() =>
@@ -334,7 +334,7 @@ describe("developer mode availability", () => {
     expect(input.inputMode).toBe("numeric");
     // The previous PIN is rejected with the existing localized error and
     // must never activate Demo Mode.
-    fireEvent.change(input, { target: { value: "2214" } });
+    fireEvent.change(input, { target: { value: "1422" } });
     fireEvent.click(screen.getAllByRole("button", { name: "تاكيد" })[0]!);
     await waitFor(() =>
       expect(screen.getByText("الرمز غير صحيح")).toBeInTheDocument(),

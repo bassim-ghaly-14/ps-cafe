@@ -390,7 +390,9 @@ export default function SettingsScreen(props: Props) {
         <div
           className="modal-backdrop"
           role="presentation"
-          onClick={() => setEditing(null)}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setEditing(null);
+          }}
         >
           <div
             className="modal settings-edit-box"
@@ -399,7 +401,6 @@ export default function SettingsScreen(props: Props) {
             aria-label={
               editing === "new" ? t("settings.add") : t("settings.edit")
             }
-            onClick={(e) => e.stopPropagation()}
           >
             <h3>
               {editing === "new" ? t("settings.add") : t("settings.edit")}

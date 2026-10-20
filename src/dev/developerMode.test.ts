@@ -25,7 +25,7 @@ describe("developer PIN gate", () => {
   });
 
   it("rejects the previous PIN and other wrong input", () => {
-    expect(verifyDeveloperPin("2214")).toBe(false);
+    expect(verifyDeveloperPin("1422")).toBe(false);
     expect(verifyDeveloperPin("0000")).toBe(false);
     expect(verifyDeveloperPin("")).toBe(false);
     expect(verifyDeveloperPin("142")).toBe(false);
@@ -36,7 +36,7 @@ describe("developer PIN gate", () => {
 
   it("trims surrounding whitespace (existing validation contract)", () => {
     expect(verifyDeveloperPin(" 2214 ")).toBe(true);
-    expect(verifyDeveloperPin(" 2214 ")).toBe(false);
+    expect(verifyDeveloperPin(" 1422 ")).toBe(false);
     expect(verifyDeveloperPin("   ")).toBe(false);
   });
 

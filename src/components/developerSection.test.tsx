@@ -110,11 +110,11 @@ describe("DeveloperSection PIN gate", () => {
     expect(logged).not.toContain("2214");
   });
 
-  it("rejects the previous PIN 2214 and every wrong PIN without ever invoking activation", async () => {
+  it("rejects the previous PIN 1422 and every wrong PIN without ever invoking activation", async () => {
     const h = renderSection();
     const input = await openPinDialog();
 
-    for (const wrong of ["2214", "0000", "142", "22141"]) {
+    for (const wrong of ["1422", "0000", "142", "22141"]) {
       fireEvent.change(input, { target: { value: wrong } });
       fireEvent.click(screen.getByRole("button", { name: "تاكيد" }));
       expect(screen.getByText("الرمز غير صحيح")).toBeInTheDocument();
