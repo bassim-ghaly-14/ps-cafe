@@ -1,5 +1,6 @@
 import type { DbPort } from "./port";
 import { RepoError } from "./port";
+import { SortDirection } from "../utils/sort";
 
 export const MEM_KEY = "pscafe.sqlite.fallback.v1";
 
@@ -496,6 +497,22 @@ export function createMemoryPort(options: MemoryPortOptions = {}): DbPort {
       );
     }
 
+    if (
+      query.includes("from business_days") &&
+      query.includes("order by started_at_utc desc")
+    ) {
+      return rows(
+        [...tables.business_days]
+          .sort(
+            (a, b) =>
+              ((b["started_at_utc"] as number) ?? 0) -
+                ((a["started_at_utc"] as number) ?? 0) ||
+              ((b["id"] as number) ?? 0) - ((a["id"] as number) ?? 0),
+          )
+          .map((row) => ({ ...row })),
+      );
+    }
+
     if (query.includes("from business_days") && query.includes("count(*)")) {
       const count = tables.business_days.filter(
         (row) => row["ended_at_utc"] !== null,
@@ -653,24 +670,48 @@ export function createMemoryPort(options: MemoryPortOptions = {}): DbPort {
       return rows(completed);
     }
 
-    // Paginated, newest-first history for ONE station. Supports LIMIT/OFFSET
+    // Paginated, sortable history for ONE station. Supports LIMIT/OFFSET
     // params; slices defensively since not every driver binds LIMIT.
+    // ORDER BY column is detected from the query text; NULLs sort last.
     if (
       query.includes("from rental_sessions") &&
       query.includes("station_id") &&
-      query.includes("order by started_at_utc desc")
+      query.includes("order by")
     ) {
       const id = num(0);
       const limit = typeof params[1] === "number" ? (params[1] as number) : 20;
       const offset = typeof params[2] === "number" ? (params[2] as number) : 0;
+
+      // Detect the ORDER BY column from the normalized query.
+      let orderColumn: keyof Row = "started_at_utc";
+      if (query.includes("order by ended_at_utc")) orderColumn = "ended_at_utc";
+      else if (query.includes("order by duration_ms"))
+        orderColumn = "duration_ms";
+      else if (query.includes("order by rate_minor_at_start"))
+        orderColumn = "rate_minor_at_start";
+
+      const desc = query.includes(`${orderColumn} desc`);
+      const dir: SortDirection = desc ? "desc" : "asc";
+
       const sorted = tables.rental_sessions
         .filter((row) => row["station_id"] === id)
-        .sort(
-          (a, b) =>
-            ((b["started_at_utc"] as number) ?? 0) -
-              ((a["started_at_utc"] as number) ?? 0) ||
-            ((b["id"] as number) ?? 0) - ((a["id"] as number) ?? 0),
-        );
+        .sort((a, b) => {
+          const av = a[orderColumn];
+          const bv = b[orderColumn];
+          const aMissing =
+            av === null || av === undefined || !Number.isFinite(av);
+          const bMissing =
+            bv === null || bv === undefined || !Number.isFinite(bv);
+          if (aMissing && bMissing)
+            // SQL tie-breaks on id DESC even for NULL sort columns.
+            return ((b["id"] as number) ?? 0) - ((a["id"] as number) ?? 0);
+          if (aMissing) return 1;
+          if (bMissing) return -1;
+          const d = (av as number) - (bv as number);
+          const c = dir === "asc" ? d : -d;
+          if (c !== 0) return c;
+          return ((b["id"] as number) ?? 0) - ((a["id"] as number) ?? 0);
+        });
       return rows(
         sorted.slice(offset, offset + limit).map((row) => ({ ...row })),
       );

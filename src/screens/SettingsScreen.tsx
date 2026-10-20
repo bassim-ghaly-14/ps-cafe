@@ -148,7 +148,7 @@ export default function SettingsScreen(props: Props) {
   };
 
   const body = (
-    <section aria-label={t("nav.settings")}>
+    <section className="settings-section" aria-label={t("nav.settings")}>
       {notice && (
         <p
           className={notice.kind === "ok" ? "notice ok" : "notice err"}
@@ -159,25 +159,28 @@ export default function SettingsScreen(props: Props) {
       )}
       <div className="box">
         <h3>{t("settings.cardsTitle")}</h3>
-        <div className="set-row head">
+        {/* Column labels mirror the station row cells exactly:
+            swatch | name | active status | actions. */}
+        <div className="settings-station-row head">
           <span />
           <span className="h">{t("settings.colName")}</span>
-          <span className="h">{t("settings.colColor")}</span>
-          <span className="h">{t("settings.colVisible")}</span>
-          <span />
+          <span className="h hide-sm">{t("settings.colActive")}</span>
+          <span className="h">{t("settings.colActions")}</span>
         </div>
         {stations.map((s) => (
-          <div className="set-row" key={s.id}>
+          <div className="settings-station-row" key={s.id}>
             <span
               className="sw"
               style={{ background: s.colorHex }}
               aria-hidden
             />
-            <span className="set-name">{s.name}</span>
-            <span className="set-meta">
+            <span className="set-name" title={s.name}>
+              {s.name}
+            </span>
+            <span className="set-meta sub hide-sm">
               {s.isActive ? t("settings.activate") : t("settings.deactivate")}
             </span>
-            <span className="set-ops">
+            <span className="set-ops settings-station-actions">
               <button
                 type="button"
                 className="mini"
@@ -223,7 +226,7 @@ export default function SettingsScreen(props: Props) {
               </button>
               <button
                 type="button"
-                className="mini danger"
+                className={`mini danger ${s.isActive ? "" : "ghost"}`}
                 disabled={busy}
                 onClick={() =>
                   s.isActive
@@ -249,7 +252,6 @@ export default function SettingsScreen(props: Props) {
                 </span>
               </button>
             </span>
-            <span />
           </div>
         ))}
         <div className="row2">
@@ -291,7 +293,7 @@ export default function SettingsScreen(props: Props) {
     <>
       {body}
       {editing !== null && (
-        <div className="box">
+        <div className="box settings-edit-box">
           <h3>{editing === "new" ? t("settings.add") : t("settings.edit")}</h3>
           <label className="fld" htmlFor="station-name">
             <span>{t("settings.nameLabel")}</span>

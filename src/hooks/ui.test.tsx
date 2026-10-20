@@ -248,6 +248,24 @@ describe("settings action controls", () => {
       screen.getAllByRole("button", { name: "إخفاء" }).length,
     ).toBeGreaterThan(0);
   });
+
+  it("settings header labels align with the station row cells", async () => {
+    await renderReadyApp();
+    fireEvent.click(screen.getByRole("button", { name: "الإعدادات" }));
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole("button", { name: "تعديل" }).length,
+      ).toBeGreaterThan(0),
+    );
+
+    const head = document.querySelector(".settings-station-row.head");
+    expect(head).not.toBeNull();
+    // The header must use the same cell count as a data row, otherwise the
+    // grid wraps and the labels drift out of alignment with the columns.
+    const dataRow = document.querySelector(".settings-station-row:not(.head)");
+    expect(dataRow).not.toBeNull();
+    expect(head!.children.length).toBe(dataRow!.children.length);
+  });
 });
 
 describe("developer mode availability", () => {

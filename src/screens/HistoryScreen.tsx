@@ -1,6 +1,12 @@
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNow } from "../hooks/useNow";
-import { isValidTimestamp, formatHMS } from "../utils/time";
+import { ArrowDown, ArrowUp } from "lucide-react";
+import {
+  compareTimestamps,
+  compareNullableNumber,
+  nextSort,
+  type SortDirection,
+} from "../utils/sort";
 import {
   formatDateTimeLocal,
   formatHours,
@@ -8,7 +14,10 @@ import {
   formatRevenue,
   liveHMS,
 } from "../utils/format";
+import { isValidTimestamp, formatHMS } from "../utils/time";
+import { useNow } from "../hooks/useNow";
 import WorkdayStamp from "../components/WorkdayStamp";
+import BackButton from "../components/BackButton";
 import type { BusinessDay } from "../domain/types";
 
 interface DayAggregate {
@@ -24,6 +33,20 @@ interface Props {
   onBack: () => void;
 }
 
+type HistorySortKey =
+  | "id"
+  | "startedAt"
+  | "endedAt"
+  | "duration"
+  | "sessions"
+  | "hours"
+  | "revenue";
+
+const INITIAL_SORT: { key: HistorySortKey; dir: SortDirection } = {
+  key: "startedAt",
+  dir: "desc",
+};
+
 /**
  * Full workday history page. Every metric is scoped to its own workday id
  * from a single aggregate query — never the currently active workday's
@@ -37,12 +60,72 @@ export default function HistoryScreen({
 }: Props) {
   const { t } = useTranslation();
   const now = useNow(openDay !== null);
+  const [sort, setSort] = useState<{
+    key: HistorySortKey;
+    dir: SortDirection;
+  } | null>(INITIAL_SORT);
+
+  const sortedDays = useMemo(() => {
+    if (!sort) return [...days];
+    return [...days].sort((a, b) => {
+      switch (sort.key) {
+        case "id":
+          return compareNullableNumber(a.id, b.id, sort.dir);
+        case "startedAt":
+          return compareTimestamps(a.startedAtUtc, b.startedAtUtc, sort.dir, {
+            a: a.id,
+            b: b.id,
+          });
+        case "endedAt": {
+          const av = a.endedAtUtc ?? null;
+          const bv = b.endedAtUtc ?? null;
+          return compareTimestamps(av, bv, sort.dir, { a: a.id, b: b.id });
+        }
+        case "duration": {
+          const aggA = dayAggregates.get(a.id);
+          const aggB = dayAggregates.get(b.id);
+          return compareNullableNumber(
+            aggA?.totalMs ?? null,
+            aggB?.totalMs ?? null,
+            sort.dir,
+          );
+        }
+        case "sessions": {
+          const aggA = dayAggregates.get(a.id);
+          const aggB = dayAggregates.get(b.id);
+          return compareNullableNumber(
+            aggA?.count ?? null,
+            aggB?.count ?? null,
+            sort.dir,
+          );
+        }
+        case "hours": {
+          const aggA = dayAggregates.get(a.id);
+          const aggB = dayAggregates.get(b.id);
+          return compareNullableNumber(
+            aggA?.totalMs ?? null,
+            aggB?.totalMs ?? null,
+            sort.dir,
+          );
+        }
+        case "revenue": {
+          const aggA = dayAggregates.get(a.id);
+          const aggB = dayAggregates.get(b.id);
+          return compareNullableNumber(
+            aggA?.revenueMinor ?? null,
+            aggB?.revenueMinor ?? null,
+            sort.dir,
+          );
+        }
+        default:
+          return 0;
+      }
+    });
+  }, [days, sort, dayAggregates]);
 
   return (
     <section aria-label={t("day.historyTitle")}>
-      <button type="button" className="btn ghost" onClick={onBack}>
-        {t("day.backToDay")}
-      </button>
+      <BackButton onClick={onBack} labelKey="day.backToDay" />
       <h3>{t("day.historyTitle")}</h3>
       {days.length === 0 ? (
         <p className="sub">{t("day.emptyHistory")}</p>
@@ -51,17 +134,73 @@ export default function HistoryScreen({
           <table>
             <thead>
               <tr>
-                <th>{t("day.colDay")}</th>
-                <th>{t("day.colOpened")}</th>
-                <th>{t("day.colClosed")}</th>
-                <th>{t("day.colDuration")}</th>
-                <th>{t("day.colSessions")}</th>
-                <th>{t("day.colHours")}</th>
-                <th>{t("day.colRevenue")}</th>
+                <th>
+                  <SortHeader
+                    key="id"
+                    label={t("day.colDay")}
+                    sort={sort}
+                    onSort={setSort}
+                    initialDir="desc"
+                  />
+                </th>
+                <th>
+                  <SortHeader
+                    key="startedAt"
+                    label={t("day.colOpened")}
+                    sort={sort}
+                    onSort={setSort}
+                    initialDir="desc"
+                  />
+                </th>
+                <th>
+                  <SortHeader
+                    key="endedAt"
+                    label={t("day.colClosed")}
+                    sort={sort}
+                    onSort={setSort}
+                    initialDir="desc"
+                  />
+                </th>
+                <th className="n" dir="ltr">
+                  <SortHeader
+                    key="duration"
+                    label={t("day.colDuration")}
+                    sort={sort}
+                    onSort={setSort}
+                    initialDir="desc"
+                  />
+                </th>
+                <th className="n" dir="ltr">
+                  <SortHeader
+                    key="sessions"
+                    label={t("day.colSessions")}
+                    sort={sort}
+                    onSort={setSort}
+                    initialDir="desc"
+                  />
+                </th>
+                <th className="n" dir="ltr">
+                  <SortHeader
+                    key="hours"
+                    label={t("day.colHours")}
+                    sort={sort}
+                    onSort={setSort}
+                    initialDir="desc"
+                  />
+                </th>
+                <th className="n">
+                  <SortHeader
+                    key="revenue"
+                    label={t("day.colRevenue")}
+                    sort={sort}
+                    onSort={setSort}
+                    initialDir="desc"
+                  />
+                </th>
               </tr>
             </thead>
             <tbody>
-              {days.map((d) => {
+              {sortedDays.map((d) => {
                 const isOpen = d.endedAtUtc === null;
                 const current = isOpen && d.id === openDay?.id;
                 const agg = dayAggregates.get(d.id);
@@ -112,5 +251,42 @@ export default function HistoryScreen({
         </div>
       )}
     </section>
+  );
+}
+
+function SortHeader({
+  key,
+  label,
+  sort,
+  onSort,
+  initialDir,
+}: {
+  key: HistorySortKey;
+  label: string;
+  sort: { key: HistorySortKey; dir: SortDirection } | null;
+  onSort: (s: { key: HistorySortKey; dir: SortDirection }) => void;
+  initialDir: SortDirection;
+}) {
+  const active = sort?.key === key;
+  const dir = active ? sort.dir : null;
+  return (
+    <button
+      type="button"
+      className="sort-header"
+      onClick={() => onSort(nextSort(sort, key, initialDir))}
+      aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
+      aria-label={`${label} ${active ? (dir === "asc" ? "sorted ascending" : "sorted descending") : "sortable"}`}
+    >
+      <span className="sort-label">{label}</span>
+      {active ? (
+        dir === "asc" ? (
+          <ArrowUp size={14} aria-hidden />
+        ) : (
+          <ArrowDown size={14} aria-hidden />
+        )
+      ) : (
+        <ArrowDown size={14} className="sort-inactive" aria-hidden />
+      )}
+    </button>
   );
 }

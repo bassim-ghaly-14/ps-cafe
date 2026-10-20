@@ -42,7 +42,7 @@ export async function getOpenDay(): Promise<BusinessDay | null> {
 export async function listDays(limit = 50): Promise<BusinessDay[]> {
   const db = await getActiveDb();
   const rows = await db.select<Row>(
-    "SELECT * FROM business_days ORDER BY id DESC LIMIT (?)",
+    "SELECT * FROM business_days ORDER BY started_at_utc DESC, id DESC LIMIT (?)",
     [limit],
   );
   // LIMIT via placeholder is not supported by every driver — slice defensively.

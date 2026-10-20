@@ -129,7 +129,6 @@ fn contains_word(hay: &str, needle: &str) -> bool {
     false
 }
 
-
 /// Validate one statement. `is_write` mirrors the endpoint used
 /// (`select` = read path, `execute` = write path): the kind inferred from
 /// the SQL must match the endpoint, so a write can never ride the
@@ -209,6 +208,7 @@ mod tests {
         let reads = [
             "SELECT * FROM business_days WHERE ended_at_utc IS NULL LIMIT 1",
             "SELECT * FROM business_days ORDER BY id DESC LIMIT (?)",
+            "SELECT * FROM business_days ORDER BY started_at_utc DESC, id DESC LIMIT (?)",
             "SELECT COUNT(*) AS count FROM business_days WHERE ended_at_utc IS NOT NULL",
             "SELECT * FROM rental_sessions WHERE station_id = ? AND ended_at_utc IS NULL LIMIT 1",
             "SELECT * FROM rental_sessions WHERE ended_at_utc IS NULL ORDER BY id ASC",
@@ -217,6 +217,17 @@ mod tests {
             "SELECT MAX(sort_order) AS maxOrder FROM stations",
             "SELECT version FROM schema_meta",
             "SELECT station_id AS stationId, COUNT(*) AS count FROM rental_sessions WHERE business_day_id = ? GROUP BY station_id",
+            "SELECT COUNT(*) AS count FROM rental_sessions WHERE station_id = ?",
+            "SELECT id, duration_ms, rate_minor_at_start FROM rental_sessions WHERE station_id = ? AND ended_at_utc IS NOT NULL ORDER BY id ASC",
+            // Dynamic station-history sorts: one variant per column/direction.
+            "SELECT * FROM rental_sessions WHERE station_id = ? ORDER BY started_at_utc IS NULL, started_at_utc ASC, id DESC LIMIT ? OFFSET ?",
+            "SELECT * FROM rental_sessions WHERE station_id = ? ORDER BY started_at_utc IS NULL, started_at_utc DESC, id DESC LIMIT ? OFFSET ?",
+            "SELECT * FROM rental_sessions WHERE station_id = ? ORDER BY ended_at_utc IS NULL, ended_at_utc ASC, id DESC LIMIT ? OFFSET ?",
+            "SELECT * FROM rental_sessions WHERE station_id = ? ORDER BY ended_at_utc IS NULL, ended_at_utc DESC, id DESC LIMIT ? OFFSET ?",
+            "SELECT * FROM rental_sessions WHERE station_id = ? ORDER BY duration_ms IS NULL, duration_ms ASC, id DESC LIMIT ? OFFSET ?",
+            "SELECT * FROM rental_sessions WHERE station_id = ? ORDER BY duration_ms IS NULL, duration_ms DESC, id DESC LIMIT ? OFFSET ?",
+            "SELECT * FROM rental_sessions WHERE station_id = ? ORDER BY rate_minor_at_start IS NULL, rate_minor_at_start ASC, id DESC LIMIT ? OFFSET ?",
+            "SELECT * FROM rental_sessions WHERE station_id = ? ORDER BY rate_minor_at_start IS NULL, rate_minor_at_start DESC, id DESC LIMIT ? OFFSET ?",
         ];
         for q in reads {
             validate(q, false).unwrap_or_else(|e| panic!("{q}: {e}"));

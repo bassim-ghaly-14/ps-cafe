@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowRight } from "lucide-react";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import StatCard from "../components/StatCard";
 import { useNow } from "../hooks/useNow";
 import { formatRateMajor, sessionRevenueMinor } from "../domain/pricing";
 import { elapsedMs, formatHMS } from "../utils/time";
+import { nextSort, type SortDirection } from "../utils/sort";
 import {
   formatDateTimeLocal,
   formatHours,
@@ -19,6 +20,7 @@ import {
   getActiveSession,
   listSessionsForStation,
 } from "../repositories/sessionRepo";
+import BackButton from "../components/BackButton";
 import type { CafeResult } from "../hooks/useCafe";
 import type { BusinessDay, RentalSession, Station } from "../domain/types";
 
@@ -65,6 +67,13 @@ export default function StationDetailsScreen(props: Props) {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [busy, setBusy] = useState(false);
   const now = useNow(true);
+  const [sort, setSort] = useState<{
+    key: "startedAt" | "endedAt" | "duration" | "rate";
+    dir: SortDirection;
+  } | null>({
+    key: "startedAt",
+    dir: "desc",
+  });
 
   const load = async (id: number, limit: number) => {
     try {
@@ -76,7 +85,13 @@ export default function StationDetailsScreen(props: Props) {
       const [active, agg, page] = await Promise.all([
         getActiveSession(id),
         aggregateForStation(id),
-        listSessionsForStation(id, limit, 0),
+        listSessionsForStation(
+          id,
+          limit,
+          0,
+          sort?.key ?? "startedAt",
+          sort?.dir ?? "desc",
+        ),
       ]);
       setState({
         kind: "ready",
@@ -100,6 +115,11 @@ export default function StationDetailsScreen(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stationId]);
 
+  useEffect(() => {
+    void load(stationId, PAGE_SIZE);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sort]);
+
   const refresh = () => load(stationId, shownCount(state));
 
   if (state.kind === "loading") {
@@ -115,10 +135,7 @@ export default function StationDetailsScreen(props: Props) {
   if (state.kind === "missing") {
     return (
       <section aria-label={t("device.back")}>
-        <button type="button" className="btn ghost" onClick={onBack}>
-          <ArrowRight size={16} aria-hidden />
-          <span>{t("device.back")}</span>
-        </button>
+        <BackButton onClick={onBack} labelKey="device.back" />
         <div className="box" style={{ marginTop: 16 }} role="alert">
           <h3>{t("device.notFoundTitle")}</h3>
           <p className="sub">{t("device.notFoundBody")}</p>
@@ -174,6 +191,8 @@ export default function StationDetailsScreen(props: Props) {
         stationId,
         PAGE_SIZE,
         state.history.length,
+        sort?.key ?? "startedAt",
+        sort?.dir ?? "desc",
       );
       setState({
         ...state,
@@ -196,10 +215,7 @@ export default function StationDetailsScreen(props: Props) {
 
   return (
     <section aria-label={station.name}>
-      <button type="button" className="btn ghost" onClick={onBack}>
-        <ArrowRight size={16} aria-hidden />
-        <span>{t("device.back")}</span>
-      </button>
+      <BackButton onClick={onBack} labelKey="device.back" />
       <div className="box dev-head" style={{ marginTop: 16 }}>
         <div className="dev-title-row">
           <span
@@ -330,11 +346,43 @@ export default function StationDetailsScreen(props: Props) {
               <table>
                 <thead>
                   <tr>
-                    <th>{t("device.colStart")}</th>
-                    <th>{t("device.colEnd")}</th>
-                    <th>{t("device.colDuration")}</th>
-                    <th>{t("device.colRate")}</th>
-                    <th>{t("device.colRevenue")}</th>
+                    <th>
+                      <SessionSortHeader
+                        key="startedAt"
+                        label={t("device.colStart")}
+                        sort={sort}
+                        onSort={setSort}
+                        initialDir="desc"
+                      />
+                    </th>
+                    <th>
+                      <SessionSortHeader
+                        key="endedAt"
+                        label={t("device.colEnd")}
+                        sort={sort}
+                        onSort={setSort}
+                        initialDir="desc"
+                      />
+                    </th>
+                    <th className="n" dir="ltr">
+                      <SessionSortHeader
+                        key="duration"
+                        label={t("device.colDuration")}
+                        sort={sort}
+                        onSort={setSort}
+                        initialDir="desc"
+                      />
+                    </th>
+                    <th className="n" dir="ltr">
+                      <SessionSortHeader
+                        key="rate"
+                        label={t("device.colRate")}
+                        sort={sort}
+                        onSort={setSort}
+                        initialDir="desc"
+                      />
+                    </th>
+                    <th className="n">{t("device.colRevenue")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -389,5 +437,48 @@ export default function StationDetailsScreen(props: Props) {
         )}
       </div>
     </section>
+  );
+}
+
+function SessionSortHeader({
+  key,
+  label,
+  sort,
+  onSort,
+  initialDir,
+}: {
+  key: "startedAt" | "endedAt" | "duration" | "rate";
+  label: string;
+  sort: {
+    key: "startedAt" | "endedAt" | "duration" | "rate";
+    dir: SortDirection;
+  } | null;
+  onSort: (s: {
+    key: "startedAt" | "endedAt" | "duration" | "rate";
+    dir: SortDirection;
+  }) => void;
+  initialDir: SortDirection;
+}) {
+  const active = sort?.key === key;
+  const dir = active ? sort.dir : null;
+  return (
+    <button
+      type="button"
+      className="sort-header"
+      onClick={() => onSort(nextSort(sort, key, initialDir))}
+      aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
+      aria-label={`${label} ${active ? (dir === "asc" ? "sorted ascending" : "sorted descending") : "sortable"}`}
+    >
+      <span className="sort-label">{label}</span>
+      {active ? (
+        dir === "asc" ? (
+          <ArrowUp size={14} aria-hidden />
+        ) : (
+          <ArrowDown size={14} aria-hidden />
+        )
+      ) : (
+        <ArrowDown size={14} className="sort-inactive" aria-hidden />
+      )}
+    </button>
   );
 }

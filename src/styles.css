@@ -534,21 +534,6 @@ td.n,
   background: var(--accent);
   animation: slide 1.2s ease-in-out infinite alternate;
 }
-.set-row {
-  display: grid;
-  grid-template-columns: 34px 1.4fr 1fr auto;
-  gap: 10px;
-  align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--line);
-}
-.set-row.head {
-  border-bottom-width: 2px;
-}
-.set-row .h {
-  color: var(--mute);
-  font-size: 12px;
-}
 .set-name {
   overflow-wrap: anywhere;
   font-size: 14px;
@@ -575,6 +560,11 @@ td.n,
 }
 .mini.danger {
   color: var(--bad);
+}
+/* Inactive devices show an "activate" affordance, not a destructive one:
+   the ghost style keeps the button neutral until it is actually pressed. */
+.mini.ghost {
+  color: var(--text);
 }
 .mini:disabled {
   opacity: 0.35;
@@ -729,12 +719,6 @@ input[type="password"] {
   .splash-logo {
     width: 108px;
   }
-  .set-row {
-    grid-template-columns: 20px 1fr auto;
-  }
-  .set-meta {
-    display: none;
-  }
   .clock {
     font-size: 34px;
   }
@@ -855,5 +839,274 @@ input:focus-visible,
   }
   .lan-qr-img {
     width: min(240px, 92vw);
+  }
+}
+
+/* ========================================================================
+   BackButton — standardized back-navigation control.
+   RTL Arabic: ArrowRight points right (toward the "back" side in RTL).
+   Internal direction is LTR so icon stays left of label.
+   ======================================================================== */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  min-height: 44px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.back-btn:not(:disabled):hover {
+  background: var(--panel2);
+  border-color: rgba(46, 230, 255, 0.35);
+}
+
+.back-btn:not(:disabled):active {
+  transform: translateY(1px);
+  border-color: var(--accent);
+}
+
+.back-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.back-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: var(--line);
+}
+
+.back-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* ========================================================================
+   Sortable table headers.
+   ======================================================================== */
+.sort-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: start;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 4px;
+  transition: opacity 0.15s ease;
+}
+
+.sort-header:hover {
+  opacity: 0.85;
+}
+
+.sort-header:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.sort-header[aria-sort="none"] {
+  color: var(--mute);
+  cursor: default;
+}
+
+.sort-header[aria-sort="none"]:hover {
+  opacity: 1;
+}
+
+.sort-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.sort-header svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.sort-inactive {
+  opacity: 0.35;
+}
+
+/* ========================================================================
+   Settings page — mobile-first responsive overhaul.
+   ======================================================================== */
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-section .box {
+  margin-bottom: 0;
+}
+
+.settings-section h3 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 4px 0;
+}
+
+.settings-section .sub {
+  font-size: 13px;
+  color: var(--mute);
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+
+.settings-station-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto auto;
+  grid-template-areas: "sw name status actions";
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Header and data rows share one cell order, so the labels line up.
+   Areas are used instead of implicit columns to keep the mapping
+   explicit and to let the actions wrap to their own row on mobile. */
+.settings-station-row > *:nth-child(1) {
+  grid-area: sw;
+}
+.settings-station-row > *:nth-child(2) {
+  grid-area: name;
+}
+.settings-station-row > *:nth-child(3) {
+  grid-area: status;
+}
+.settings-station-row > *:nth-child(4) {
+  grid-area: actions;
+}
+
+/* Header row mirrors the station row cells 1:1 so the labels line up. */
+.settings-station-row.head {
+  border-bottom-width: 2px;
+}
+
+.settings-station-row.head .h {
+  color: var(--mute);
+  font-size: 12px;
+}
+
+/* Station colour swatch — the visible colour key for each device. */
+.sw {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+
+.settings-station-row:last-child {
+  border-bottom: none;
+}
+
+.settings-station-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.settings-station-actions .mini {
+  padding: 6px 10px;
+  font-size: 12px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-edit-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-edit-box .fld {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.settings-edit-box .fld label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-edit-box .row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+@media (max-width: 480px) {
+  /* Narrow screens: the status cell is dropped and the action buttons move
+     to their own full-width row so they never squeeze the device name. */
+  .settings-station-row {
+    grid-template-columns: 20px 1fr;
+    grid-template-areas:
+      "sw name"
+      "actions actions";
+    gap: 8px;
+    padding: 8px 0;
+  }
+
+  /* The active-status cell is dropped on narrow screens, so its header
+     label must go too or the two columns drift out of alignment. */
+  .settings-station-row .hide-sm {
+    display: none;
+  }
+
+  .settings-station-actions {
+    justify-content: flex-start;
+  }
+
+  .settings-edit-box .row2 {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-section .box {
+    padding: 14px;
+  }
+}
+
+@media (max-width: 390px) {
+  .settings-station-row {
+    grid-template-columns: 18px 1fr;
+    gap: 6px;
+  }
+
+  .settings-station-actions .mini {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+
+  .settings-edit-box .fld input,
+  .settings-edit-box .fld select {
+    font-size: 16px;
   }
 }

@@ -66,6 +66,61 @@ describe("business day repository", () => {
       true,
     );
   });
+
+  it("orders days by started_at_utc descending (newest first)", async () => {
+    const t0 = Date.UTC(2026, 9, 17, 8, 0, 0); // Saturday
+    const t1 = Date.UTC(2026, 9, 18, 8, 0, 0); // Sunday
+    const t2 = Date.UTC(2026, 9, 19, 8, 0, 0); // Monday
+
+    const dSat = await dayRepo.openDay(t0);
+    await dayRepo.closeDay(dSat.id, t0 + 3600000);
+    const dSun = await dayRepo.openDay(t1);
+    await dayRepo.closeDay(dSun.id, t1 + 3600000);
+    await dayRepo.openDay(t2);
+
+    const days = await dayRepo.listDays();
+    // Newest first: Monday, Sunday, Saturday
+    expect(days[0]!.startedAtUtc).toBe(t2);
+    expect(days[1]!.startedAtUtc).toBe(t1);
+    expect(days[2]!.startedAtUtc).toBe(t0);
+  });
+
+  it("orders days across a month boundary", async () => {
+    const oct31 = Date.UTC(2026, 9, 31, 8, 0, 0); // Oct 31, 2026 (0-indexed month 9 = Oct)
+    const nov1 = Date.UTC(2026, 10, 1, 8, 0, 0); // Nov 1, 2026
+
+    const dOct = await dayRepo.openDay(oct31);
+    await dayRepo.closeDay(dOct.id, oct31 + 3600000);
+    await dayRepo.openDay(nov1);
+
+    const days = await dayRepo.listDays();
+    expect(days[0]!.startedAtUtc).toBe(nov1);
+    expect(days[1]!.startedAtUtc).toBe(oct31);
+  });
+
+  it("orders days across a year boundary", async () => {
+    const dec31 = Date.UTC(2026, 11, 31, 8, 0, 0); // Dec 31, 2026
+    const jan1 = Date.UTC(2027, 0, 1, 8, 0, 0); // Jan 1, 2027
+
+    const dDec = await dayRepo.openDay(dec31);
+    await dayRepo.closeDay(dDec.id, dec31 + 3600000);
+    await dayRepo.openDay(jan1);
+
+    const days = await dayRepo.listDays();
+    expect(days[0]!.startedAtUtc).toBe(jan1);
+    expect(days[1]!.startedAtUtc).toBe(dec31);
+  });
+
+  it("handles identical started_at_utc deterministically by id", async () => {
+    const sameTs = Date.UTC(2026, 9, 17, 8, 0, 0);
+    const d1 = await dayRepo.openDay(sameTs);
+    await dayRepo.closeDay(d1.id, sameTs + 3600000);
+    const d2 = await dayRepo.openDay(sameTs);
+
+    const days = await dayRepo.listDays();
+    expect(days[0]!.id).toBe(d2.id);
+    expect(days[1]!.id).toBe(d1.id);
+  });
 });
 
 describe("session repository", () => {

@@ -79,9 +79,8 @@
     "title": "الإعدادات",
     "cardsTitle": "كروت الأجهزة",
     "colName": "الاسم",
-    "colColor": "اللون",
-    "colVisible": "ظاهر",
     "colActive": "مفعّل",
+    "colActions": "إجراءات",
     "add": "إضافة جهاز",
     "deviceCount": "{{count}} جهاز",
     "namePlaceholder": "مثال: PS5 — جهاز 1",
@@ -175,6 +174,7 @@
     "loading": "جاري التحميل…",
     "error": "حدث خطأ",
     "close": "إغلاق",
+    "back": "رجوع",
     "now": "الآن",
     "dash": "—"
   },

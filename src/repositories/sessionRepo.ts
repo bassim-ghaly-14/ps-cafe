@@ -1,6 +1,7 @@
 import { getActiveDb } from "../db/client";
 import { validateHourlyRateMinor } from "../domain/pricing";
 import { finalizeDurationMs, isValidTimestamp } from "../utils/time";
+import { SortDirection } from "../utils/sort";
 import type { RentalSession } from "../domain/types";
 
 interface Row {
@@ -262,13 +263,16 @@ export interface StationHistoryPage {
 }
 
 /**
- * Newest-first session history for ONE station with stable id ordering.
- * Paginated — never loads unbounded history into memory.
+ * Paginated session history for ONE station with stable id tie-breaking.
+ * Supports server-side sorting by started_at_utc, ended_at_utc, duration_ms,
+ * or rate_minor_at_start. Newest-first by started_at_utc is the default.
  */
 export async function listSessionsForStation(
   stationId: number,
   limit: number,
   offset: number,
+  sortBy: "startedAt" | "endedAt" | "duration" | "rate" = "startedAt",
+  sortDir: SortDirection = "desc",
 ): Promise<StationHistoryPage> {
   const db = await getActiveDb();
   const safeLimit = Math.max(1, Math.min(200, Math.floor(limit) || 20));
@@ -277,8 +281,20 @@ export async function listSessionsForStation(
     "SELECT COUNT(*) AS count FROM rental_sessions WHERE station_id = ?",
     [stationId],
   );
+
+  const orderByColumn =
+    sortBy === "endedAt"
+      ? "ended_at_utc"
+      : sortBy === "duration"
+        ? "duration_ms"
+        : sortBy === "rate"
+          ? "rate_minor_at_start"
+          : "started_at_utc";
+  const orderDir = sortDir === "asc" ? "ASC" : "DESC";
   const rows = await db.select<Row>(
-    "SELECT * FROM rental_sessions WHERE station_id = ? ORDER BY started_at_utc DESC, id DESC LIMIT ? OFFSET ?",
+    `SELECT * FROM rental_sessions WHERE station_id = ? ` +
+      `ORDER BY ${orderByColumn} IS NULL, ${orderByColumn} ${orderDir}, id DESC ` +
+      `LIMIT ? OFFSET ?`,
     [stationId, safeLimit, safeOffset],
   );
   return {

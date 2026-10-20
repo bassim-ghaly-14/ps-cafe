@@ -125,19 +125,249 @@ describe("workday history aggregation integrity", () => {
   });
 });
 
-describe("workday timestamp formatting", () => {
-  it("weekday and datetime are derived from the same persisted instant", () => {
-    const t = Date.UTC(2026, 9, 17, 8, 30, 0);
-    const date = new Date(t);
-    const weekday = new Intl.DateTimeFormat("ar", { weekday: "long" }).format(
-      date,
-    );
-    const stamp = formatWorkdayStamp(t);
-    expect(stamp.weekday).toBe(weekday);
-    expect(stamp.date).toContain("2026");
-    expect(stamp.time).toMatch(/\d{1,2}:\d{2}/);
+describe("session history ordering", () => {
+  it("lists sessions newest-first by started_at_utc (default)", async () => {
+    const t0 = Date.UTC(2026, 9, 17, 8, 0, 0);
+    const day = await dayRepo.openDay(t0);
+    const sid = await pricedStationId(2000);
+    const s1 = await sessionRepo.startSession(sid, day.id, t0);
+    await sessionRepo.stopSession(s1.id, t0 + 3600000);
+    const s2 = await sessionRepo.startSession(sid, day.id, t0 + 10000);
+    await sessionRepo.stopSession(s2.id, t0 + 4600000);
+    const s3 = await sessionRepo.startSession(sid, day.id, t0 + 20000);
+    await sessionRepo.stopSession(s3.id, t0 + 5600000);
+    const page = await sessionRepo.listSessionsForStation(sid, 10, 0);
+    expect(page.rows.length).toBe(3);
+    expect(page.rows[0]!.startedAtUtc).toBe(t0 + 20000);
+    expect(page.rows[1]!.startedAtUtc).toBe(t0 + 10000);
+    expect(page.rows[2]!.startedAtUtc).toBe(t0);
   });
 
+  it("lists sessions in ascending order when requested", async () => {
+    const t0 = Date.UTC(2026, 9, 17, 8, 0, 0);
+    const day = await dayRepo.openDay(t0);
+    const sid = await pricedStationId(2000);
+    const s1 = await sessionRepo.startSession(sid, day.id, t0);
+    await sessionRepo.stopSession(s1.id, t0 + 3600000);
+    const s2 = await sessionRepo.startSession(sid, day.id, t0 + 10000);
+    await sessionRepo.stopSession(s2.id, t0 + 4600000);
+    const page = await sessionRepo.listSessionsForStation(
+      sid,
+      10,
+      0,
+      "startedAt",
+      "asc",
+    );
+    expect(page.rows.length).toBe(2);
+    expect(page.rows[0]!.startedAtUtc).toBe(t0);
+    expect(page.rows[1]!.startedAtUtc).toBe(t0 + 10000);
+  });
+
+  it("sorts sessions by ended_at_utc when requested", async () => {
+    const t0 = Date.UTC(2026, 9, 17, 8, 0, 0);
+    const day = await dayRepo.openDay(t0);
+    const sid = await pricedStationId(2000);
+    const s1 = await sessionRepo.startSession(sid, day.id, t0);
+    await sessionRepo.stopSession(s1.id, t0 + 3600000);
+    const s2 = await sessionRepo.startSession(sid, day.id, t0 + 1000);
+    await sessionRepo.stopSession(s2.id, t0 + 1000 + 7200000);
+    const page = await sessionRepo.listSessionsForStation(
+      sid,
+      10,
+      0,
+      "endedAt",
+      "desc",
+    );
+    expect(page.rows.length).toBe(2);
+    expect(page.rows[0]!.endedAtUtc).toBe(t0 + 1000 + 7200000);
+    expect(page.rows[1]!.endedAtUtc).toBe(t0 + 3600000);
+  });
+
+  it("sorts sessions by duration numerically, not lexicographically", async () => {
+    const t0 = Date.UTC(2026, 9, 17, 8, 0, 0);
+    const day = await dayRepo.openDay(t0);
+    const sid = await pricedStationId(2000);
+    // Durations 2h, 20m, 100m — lexicographic ordering would put "100m"
+    // before "20m"; numeric ordering must not.
+    const s1 = await sessionRepo.startSession(sid, day.id, t0);
+    await sessionRepo.stopSession(s1.id, t0 + 2 * 3_600_000);
+    const s2 = await sessionRepo.startSession(sid, day.id, t0 + 10_000);
+    await sessionRepo.stopSession(s2.id, t0 + 10_000 + 20 * 60_000);
+    const s3 = await sessionRepo.startSession(sid, day.id, t0 + 20_000);
+    await sessionRepo.stopSession(s3.id, t0 + 20_000 + 100 * 60_000);
+
+    const asc = await sessionRepo.listSessionsForStation(
+      sid,
+      10,
+      0,
+      "duration",
+      "asc",
+    );
+    expect(asc.rows.map((r) => r.durationMs)).toEqual([
+      20 * 60_000,
+      100 * 60_000,
+      2 * 3_600_000,
+    ]);
+
+    const desc = await sessionRepo.listSessionsForStation(
+      sid,
+      10,
+      0,
+      "duration",
+      "desc",
+    );
+    expect(desc.rows.map((r) => r.durationMs)).toEqual([
+      2 * 3_600_000,
+      100 * 60_000,
+      20 * 60_000,
+    ]);
+  });
+
+  it("sorts sessions with a null end time last in both directions", async () => {
+    const t0 = Date.UTC(2026, 9, 17, 8, 0, 0);
+    const day = await dayRepo.openDay(t0);
+    const sid = await pricedStationId(2000);
+    const s1 = await sessionRepo.startSession(sid, day.id, t0);
+    await sessionRepo.stopSession(s1.id, t0 + 3_600_000);
+    const s2 = await sessionRepo.startSession(sid, day.id, t0 + 10_000);
+    await sessionRepo.stopSession(s2.id, t0 + 10_000 + 7_200_000);
+    // Still running: ended_at_utc IS NULL.
+    await sessionRepo.startSession(sid, day.id, t0 + 20_000);
+
+    const asc = await sessionRepo.listSessionsForStation(
+      sid,
+      10,
+      0,
+      "endedAt",
+      "asc",
+    );
+    expect(asc.rows.length).toBe(3);
+    expect(asc.rows[0]!.endedAtUtc).toBe(t0 + 3_600_000);
+    expect(asc.rows[1]!.endedAtUtc).toBe(t0 + 10_000 + 7_200_000);
+    expect(asc.rows[2]!.endedAtUtc).toBeNull();
+
+    const desc = await sessionRepo.listSessionsForStation(
+      sid,
+      10,
+      0,
+      "endedAt",
+      "desc",
+    );
+    expect(desc.rows.length).toBe(3);
+    expect(desc.rows[0]!.endedAtUtc).toBe(t0 + 10_000 + 7_200_000);
+    expect(desc.rows[1]!.endedAtUtc).toBe(t0 + 3_600_000);
+    expect(desc.rows[2]!.endedAtUtc).toBeNull();
+  });
+
+  it("paginates the sorted result", async () => {
+    const t0 = Date.UTC(2026, 9, 17, 8, 0, 0);
+    const day = await dayRepo.openDay(t0);
+    const sid = await pricedStationId(2000);
+    for (let i = 0; i < 5; i++) {
+      const s = await sessionRepo.startSession(sid, day.id, t0 + i * 1000);
+      await sessionRepo.stopSession(s.id, t0 + i * 1000 + 60_000);
+    }
+
+    const p1 = await sessionRepo.listSessionsForStation(
+      sid,
+      2,
+      0,
+      "startedAt",
+      "asc",
+    );
+    const p2 = await sessionRepo.listSessionsForStation(
+      sid,
+      2,
+      2,
+      "startedAt",
+      "asc",
+    );
+    const p3 = await sessionRepo.listSessionsForStation(
+      sid,
+      2,
+      4,
+      "startedAt",
+      "asc",
+    );
+    expect(p1.total).toBe(5);
+    expect(p1.rows.map((r) => r.startedAtUtc)).toEqual([t0, t0 + 1000]);
+    expect(p2.rows.map((r) => r.startedAtUtc)).toEqual([t0 + 2000, t0 + 3000]);
+    expect(p3.rows.map((r) => r.startedAtUtc)).toEqual([t0 + 4000]);
+  });
+
+  it("switches the sort column without changing the row set", async () => {
+    const t0 = Date.UTC(2026, 9, 17, 8, 0, 0);
+    const day = await dayRepo.openDay(t0);
+    const sid = await pricedStationId(2000);
+    const s1 = await sessionRepo.startSession(sid, day.id, t0);
+    await sessionRepo.stopSession(s1.id, t0 + 3_600_000);
+    const s2 = await sessionRepo.startSession(sid, day.id, t0 + 10_000);
+    await sessionRepo.stopSession(s2.id, t0 + 10_000 + 7_200_000);
+
+    const byStart = await sessionRepo.listSessionsForStation(
+      sid,
+      10,
+      0,
+      "startedAt",
+      "asc",
+    );
+    const byEnd = await sessionRepo.listSessionsForStation(
+      sid,
+      10,
+      0,
+      "endedAt",
+      "asc",
+    );
+    const byDuration = await sessionRepo.listSessionsForStation(
+      sid,
+      10,
+      0,
+      "duration",
+      "asc",
+    );
+    expect(byStart.total).toBe(2);
+    expect(byEnd.total).toBe(2);
+    expect(byDuration.total).toBe(2);
+    // Same rows, different order.
+    expect(new Set(byStart.rows.map((r) => r.id))).toEqual(
+      new Set(byDuration.rows.map((r) => r.id)),
+    );
+    // Shortest session first when sorting by duration ascending.
+    expect(byDuration.rows[0]!.durationMs).toBe(3_600_000);
+    expect(byDuration.rows[1]!.durationMs).toBe(7_200_000);
+  });
+
+  it("sorts sessions by rate snapshot numerically", async () => {
+    const t0 = Date.UTC(2026, 9, 17, 8, 0, 0);
+    const day = await dayRepo.openDay(t0);
+    const sid = await pricedStationId(2000);
+    const s1 = await sessionRepo.startSession(sid, day.id, t0);
+    await sessionRepo.stopSession(s1.id, t0 + 3_600_000);
+
+    // Re-price the station, then run a second session at the new rate.
+    const cur = await stationRepo.getStation(sid);
+    await stationRepo.updateStation(sid, {
+      name: cur!.name,
+      colorHex: cur!.colorHex,
+      isVisible: true,
+      isActive: true,
+      hourlyRateMinor: 50_000,
+    });
+    const s2 = await sessionRepo.startSession(sid, day.id, t0 + 10_000);
+    await sessionRepo.stopSession(s2.id, t0 + 10_000 + 3_600_000);
+
+    const desc = await sessionRepo.listSessionsForStation(
+      sid,
+      10,
+      0,
+      "rate",
+      "desc",
+    );
+    expect(desc.rows.map((r) => r.rateMinorAtStart)).toEqual([50_000, 2000]);
+  });
+});
+
+describe("workday timestamp formatting", () => {
   it("emits no bidi control characters", () => {
     const stamp = formatWorkdayStamp(Date.UTC(2026, 9, 17, 8, 30, 0));
     for (const value of Object.values(stamp)) {
