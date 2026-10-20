@@ -139,9 +139,18 @@ describe("stations workflow", () => {
       screen.getAllByRole("button", { name: "إغلاق" }).length,
     ).toBeGreaterThan(0);
     fireEvent.click(screen.getAllByRole("button", { name: "إغلاق" })[0]!);
+    // The stop operation is async (persist session → refresh → notice), and
+    // the other seeded stations already render "فاضي" while this one runs, so
+    // waiting on "فاضي" cannot observe the stop. Wait for the stop notice,
+    // which is set only after the operation completes.
     await waitFor(() =>
-      expect(screen.getAllByText("فاضي").length).toBeGreaterThan(0),
+      expect(document.querySelector(".notice.ok")?.textContent).toMatch(
+        /^تم إيقاف .+\. المدة المحفوظة \d{2}:\d{2}:\d{2}\.$/,
+      ),
     );
+    // The stopped station must be idle again and no card may still be running.
+    expect(screen.getAllByText("فاضي").length).toBeGreaterThan(0);
+    expect(screen.queryByText("شغال")).toBeNull();
     // Regression: the stop notice must interpolate the station name and the
     // saved duration — never render literal {{name}} / {{duration}} tokens.
     const notice = document.querySelector(".notice.ok");
