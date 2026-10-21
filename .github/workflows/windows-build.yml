@@ -140,6 +140,25 @@ jobs:
       - name: Build production Windows installer (NSIS, production config only)
         run: npm run build:prod:tauri
 
+      - name: Download and extract WebView2 FixedVersion CAB
+        shell: pwsh
+        run: |
+          $cabUrl = "https://msedge.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/232cf50b-3980-4531-afbb-779f446d7de1/Microsoft.WebView2.FixedVersionRuntime.155.0.4283.62.x64.cab"
+          $cabDest = "src-tauri/webview2-runtime.cab"
+          $extractDir = "src-tauri/webview2-runtime"
+
+          Write-Host "Downloading WebView2 FixedVersion CAB..."
+          Invoke-WebRequest -Uri $cabUrl -OutFile $cabDest
+
+          Write-Host "Extracting CAB..."
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [System.IO.Compression.ZipFile]::ExtractToDirectory($cabDest, $extractDir)
+
+          # Clean up the CAB file after extraction
+          Remove-Item -Path $cabDest -Force
+
+          Write-Host "WebView2 runtime extracted to $extractDir"
+
       - name: Verify NSIS installer exists and is non-empty
         shell: pwsh
         run: |

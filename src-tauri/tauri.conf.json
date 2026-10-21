@@ -20,7 +20,9 @@
     "windows": {
       "nsis": {
         "displayLanguageSelector": false
-      }
+      },
+      "webviewInstallMode": "FixedRuntime",
+      "webviewFixedRuntimePath": "./webview2-runtime"
     }
   },
   "plugins": { "sql": { "preload": ["sqlite:ps-cafe.db"] } }
