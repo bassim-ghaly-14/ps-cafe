@@ -17,6 +17,25 @@ export interface CafeResult {
   params?: Record<string, unknown>;
 }
 
+/**
+ * Synchronisation freshness for the LAN (visitor/mobile) client.
+ *
+ * - `connecting`   : first fetch has not settled yet.
+ * - `loading`      : a fetch (initial or revalidation) is in flight.
+ * - `synchronized` : last fetch succeeded and data reflects the host.
+ * - `reconnecting` : a revalidation is in flight after a prior success.
+ * - `failed`       : initial fetch failed and no valid snapshot exists yet.
+ * - `stale`        : a fetch failed after a prior success; the last valid
+ *                    snapshot is retained but must not be shown as current.
+ */
+export type SyncStatus =
+  | "connecting"
+  | "loading"
+  | "synchronized"
+  | "reconnecting"
+  | "failed"
+  | "stale";
+
 export interface CafeState {
   loading: boolean;
   dbError: string | null;
@@ -29,6 +48,12 @@ export interface CafeState {
   dayAgg: DayAggregate;
   dayAggregates: Map<number, DayAggregate>;
   perStation: Map<number, { count: number; totalMs: number }>;
+  /** Truthful synchronisation state (desktop is always "synchronized"). */
+  syncStatus: SyncStatus;
+  /** Unix ms of the last successful authoritative fetch, or null. */
+  lastSyncedAt: number | null;
+  /** True when a retained snapshot may be stale and must not be presented as current. */
+  isStale: boolean;
   refresh: () => Promise<void>;
 }
 
@@ -68,7 +93,19 @@ export function useCafeData() {
   const [perStation, setPerStation] = useState(
     new Map<number, { count: number; totalMs: number }>(),
   );
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(
+    isReadOnly() ? "connecting" : "synchronized",
+  );
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const [isStale, setIsStale] = useState(false);
   const mounted = useRef(true);
+  const requestSeq = useRef(0);
+  /** True once the first fetch has settled (controls the splash `loading` flag). */
+  const firstFetch = useRef(false);
+  /** True once at least one authoritative fetch has succeeded. */
+  const syncedRef = useRef(false);
+  /** Interval handle for visitor-mode revalidation polling. */
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     mounted.current = true;
@@ -77,7 +114,21 @@ export function useCafeData() {
     };
   }, []);
 
-  const refresh = useCallback(async () => {
+  /**
+   * Revalidation interval: visitor (read-only) clients re-fetch the
+   * authoritative snapshot periodically so host changes become visible.
+   * Desktop clients never poll — their writes flow straight to SQLite.
+   */
+  const REVALIDATE_INTERVAL_MS = 10_000;
+
+  const refresh = useCallback(async (opts?: { markStaleOnError?: boolean }) => {
+    if (!mounted.current) return;
+    const seq = ++requestSeq.current;
+    const isInitial = !firstFetch.current;
+    if (isInitial) {
+      setLoading(true);
+    }
+    setSyncStatus(isInitial ? "loading" : "reconnecting");
     try {
       await getActiveDb();
       const [open, history, stList, active, closed, all, aggregates] =
@@ -105,7 +156,8 @@ export function useCafeData() {
           ]),
         );
       }
-      if (!mounted.current) return;
+      // Ignore stale responses: only the latest request may apply its snapshot.
+      if (!mounted.current || seq !== requestSeq.current) return;
       setDbError(null);
       setOpenDay(open);
       setDays(history);
@@ -116,13 +168,59 @@ export function useCafeData() {
       setDayAgg(cur);
       setDayAggregates(byDay);
       setPerStation(per);
+      setSyncStatus("synchronized");
+      setLastSyncedAt(Date.now());
+      setIsStale(false);
+      firstFetch.current = true;
+      syncedRef.current = true;
     } catch (e) {
-      if (!mounted.current) return;
-      setDbError(e instanceof Error ? e.message : String(e));
+      if (!mounted.current || seq !== requestSeq.current) return;
+      // Never replace the last valid snapshot with empty/seeded/local data.
+      const message = e instanceof Error ? e.message : String(e);
+      setDbError(message);
+      const markStale = Boolean(opts?.markStaleOnError) || syncedRef.current;
+      setSyncStatus(markStale ? "stale" : "failed");
+      setIsStale(markStale);
     } finally {
-      if (mounted.current) setLoading(false);
+      if (!mounted.current || seq !== requestSeq.current) return;
+      if (isInitial) {
+        setLoading(false);
+        firstFetch.current = true;
+      }
     }
   }, []);
+
+  useEffect(() => {
+    if (!isReadOnly()) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return undefined;
+    }
+    intervalRef.current = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void refresh({ markStaleOnError: true });
+      }
+    }, REVALIDATE_INTERVAL_MS);
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [isReadOnly(), refresh]);
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (isReadOnly() && document.visibilityState === "visible") {
+        void refresh({ markStaleOnError: true });
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [isReadOnly(), refresh]);
 
   useEffect(() => {
     void refresh();
@@ -140,6 +238,9 @@ export function useCafeData() {
     dayAgg,
     dayAggregates,
     perStation,
+    syncStatus,
+    lastSyncedAt,
+    isStale,
     refresh,
     mounted,
   };

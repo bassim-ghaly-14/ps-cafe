@@ -265,6 +265,10 @@ body {
   border-color: #14604a;
   color: var(--ok);
 }
+.notice.warn {
+  border-color: #ffc233;
+  color: var(--text);
+}
 .notice.err {
   border-color: var(--bad);
   color: var(--bad);
