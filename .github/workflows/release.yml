@@ -76,11 +76,21 @@ jobs:
           $extractDir = "src-tauri/webview2-runtime"
           Write-Host "Downloading WebView2 FixedVersion CAB..."
           Invoke-WebRequest -Uri $cabUrl -OutFile $cabDest
+          Write-Host "Creating extraction directory..."
+          if (-not (Test-Path $extractDir)) {
+            New-Item -ItemType Directory -Path $extractDir | Out-Null
+          }
           Write-Host "Extracting WebView2 CAB with Expand.exe..."
           expand.exe -F:* "$cabDest" "$extractDir"
           if (-not (Test-Path $extractDir)) {
             throw "WebView2 CAB extraction failed: extract directory $extractDir was not created"
           }
+          # Verify extraction produced actual runtime files
+          $files = Get-ChildItem -Path $extractDir -Recurse -File
+          if ($files.Count -eq 0) {
+            throw "WebView2 CAB extraction produced no files in $extractDir"
+          }
+          Write-Host "Extracted $($files.Count) files to $extractDir"
           # Clean up the CAB file after extraction
           Remove-Item -Path $cabDest -Force
           Write-Host "WebView2 runtime extracted to $extractDir"
