@@ -91,8 +91,19 @@ jobs:
             throw "WebView2 CAB extraction produced no files in $extractDir"
           }
           Write-Host "Extracted $($files.Count) files to $extractDir"
-          # Clean up the CAB file after extraction
+          # Clean up the CAB file after successful extraction
           Remove-Item -Path $cabDest -Force
+
+          # Copy the extracted runtime directory to the NSIS build output
+          # so Tauri's fixedRuntime path "./webview2-runtime" is included in the installer
+          $nsisOutputDir = "src-tauri/target/release/bundle/nsis"
+          if (-not (Test-Path $nsisOutputDir)) {
+            Write-Host "NSIS output directory does not exist yet; it will be created during the Tauri build"
+          } else {
+            Write-Host "Copying webview2-runtime to NSIS output directory..."
+            Copy-Item -Path "$extractDir/*" -Destination "$nsisOutputDir/" -Recurse -Force
+            Write-Host "Copied webview2-runtime to $nsisOutputDir"
+          }
           Write-Host "WebView2 runtime extracted to $extractDir"
 
       - name: Rust checks and tests
@@ -180,6 +191,17 @@ jobs:
           "INSTALLER_PATH=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "INSTALLER_NAME=$($exe.Name)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           Write-Host "Found installer: $($exe.FullName) ($($exe.Length) bytes)"
+          # Validate that WebView2 runtime is included in the installer
+          $runtimeDir = Join-Path $dir "webview2-runtime"
+          if (Test-Path $runtimeDir) {
+            $runtimeFiles = Get-ChildItem -Path $runtimeDir -Recurse -File | Measure-Object
+            Write-Host "WebView2 runtime directory found in installer with $($runtimeFiles.Count) files"
+            "$RUNTIME_DIR_EXISTS=true" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          } else {
+            Write-Warning "WebView2 runtime directory NOT found in installer at $runtimeDir"
+            "$RUNTIME_DIR_EXISTS=false" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            throw "WebView2 runtime directory is missing from the NSIS output! The installed application will not be able to find the WebView2 Runtime."
+          }
 
       - name: Rename to deterministic filename (PS-Cafe-Setup-<version>.exe)
         shell: pwsh
