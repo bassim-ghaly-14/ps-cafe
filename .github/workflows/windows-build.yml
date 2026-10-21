@@ -27,7 +27,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+  id-token: write
+
+concurrency:
+  group: windows-installer
+  cancel-in-progress: true
 
 jobs:
   build-windows:
@@ -159,6 +164,15 @@ jobs:
           "CANONICAL_INSTALLER=$dest" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           Write-Host "Canonical installer: $dest"
 
+      - name: Stage canonical installer at repo root
+        shell: pwsh
+        run: |
+          $version = (node -p "require('./package.json').version")
+          $src = "src-tauri/target/release/bundle/nsis/PS-Cafe-Setup-$version.exe"
+          $dst = "PS-Cafe-Setup-$version.exe"
+          Copy-Item -Path $src -Destination $dst -Force
+          Write-Host "Staged installer at repo root: $dst"
+
       - name: Upload Windows installer artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -166,3 +180,10 @@ jobs:
           path: ${{ env.CANONICAL_INSTALLER }}
           retention-days: 14
           if-no-files-found: error
+
+      - name: Update existing GitHub Release asset (v0.1.0)
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          tag_name: v0.1.0
+          files: PS-Cafe-Setup-0.1.0.exe
+          fail_on_unmatched_files: false
