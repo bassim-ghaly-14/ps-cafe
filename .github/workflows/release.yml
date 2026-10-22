@@ -94,7 +94,15 @@ jobs:
           # Clean up the CAB file after extraction
           Remove-Item -Path $cabDest -Force
 
-          Write-Host "WebView2 runtime extracted to $extractDir"
+          # Stage the extracted runtime at the path Tauri's fixedRuntime mode
+          # expects (bundle.resources and webviewInstallMode.path both resolve
+          # ../webview2-runtime from src-tauri to ./webview2-runtime).
+          if (-not (Test-Path ./webview2-runtime)) {
+            Copy-Item -Path "$extractDir" -Destination ./webview2-runtime -Recurse -Force
+          }
+          Write-Host "WebView2 runtime staged at ./webview2-runtime for Tauri bundling"
+          # Clean up the now-redundant extract directory
+          Remove-Item -Path $extractDir -Recurse -Force -ErrorAction SilentlyContinue
 
       - name: Rust checks and tests
         # NOTE: clippy reports without `-D warnings` because the LAN module
@@ -178,6 +186,23 @@ jobs:
             Sort-Object Length -Descending | Select-Object -First 1
           if (-not $exe) { throw "No production NSIS .exe found in $dir" }
           if ($exe.Length -eq 0) { throw "Installer is empty: $($exe.FullName)" }
+          $installerSizeMB = [math]::Round($exe.Length / 1MB, 2)
+          Write-Host "Installer size: $installerSizeMB MB"
+          # fixedRuntime mode adds ~180MB; size is a sanity check, not proof.
+          if ($installerSizeMB -lt 100) {
+            throw "Installer too small ($installerSizeMB MB) to contain the embedded WebView2 offline payload. Expected >100 MB."
+          }
+          # Confirm the offline WebView2 payload was staged for FixedRuntime
+          # bundling (tauri.release.conf.json: resources + fixedRuntime.path).
+          # NSIS compresses embedded files, so marker strings do not appear
+          # uncompressed in the .exe; verify the staged runtime source instead.
+          $runtimeDir = Resolve-Path -Path './webview2-runtime' -ErrorAction Stop
+          $loaderDll = Join-Path $runtimeDir 'WebView2Loader.dll'
+          if (-not (Test-Path $loaderDll -PathType Leaf)) {
+            throw "WebView2Loader.dll not found in staged runtime directory '$runtimeDir'. The offline WebView2 payload was not staged for FixedRuntime bundling; the installer cannot contain it."
+          }
+          $runtimeFileCount = (Get-ChildItem -Path $runtimeDir -Recurse -File).Count
+          Write-Host "Offline WebView2 payload staged: $runtimeFileCount files in $runtimeDir (WebView2Loader.dll present)."
           $version = (node -p "require('./package.json').version")
           $dest = "PS-Cafe-Setup-$version.exe"
           Copy-Item -Path $exe.FullName -Destination $dest -Force
