@@ -196,13 +196,18 @@ jobs:
           # bundling (tauri.release.conf.json: resources + fixedRuntime.path).
           # NSIS compresses embedded files, so marker strings do not appear
           # uncompressed in the .exe; verify the staged runtime source instead.
-          $runtimeDir = Resolve-Path -Path './webview2-runtime' -ErrorAction Stop
-          $loaderDll = Join-Path $runtimeDir 'WebView2Loader.dll'
-          if (-not (Test-Path $loaderDll -PathType Leaf)) {
-            throw "WebView2Loader.dll not found in staged runtime directory '$runtimeDir'. The offline WebView2 payload was not staged for FixedRuntime bundling; the installer cannot contain it."
+          if (-not (Test-Path -Path './webview2-runtime' -PathType Container)) {
+            throw "Offline WebView2 runtime directory './webview2-runtime' was not staged before the build. The FixedRuntime payload cannot be bundled into the installer."
           }
-          $runtimeFileCount = (Get-ChildItem -Path $runtimeDir -Recurse -File).Count
-          Write-Host "Offline WebView2 payload staged: $runtimeFileCount files in $runtimeDir (WebView2Loader.dll present)."
+          $runtimeFiles = Get-ChildItem -Path './webview2-runtime' -Recurse -File
+          if ($runtimeFiles.Count -eq 0) {
+            throw "Offline WebView2 runtime directory './webview2-runtime' is empty; no payload files were staged for FixedRuntime bundling."
+          }
+          $loader = $runtimeFiles | Where-Object { $_.Name -eq 'WebView2Loader.dll' } | Select-Object -First 1
+          if (-not $loader) {
+            throw "WebView2Loader.dll not found anywhere under ./webview2-runtime; the WebView2 FixedRuntime payload was not staged correctly."
+          }
+          Write-Host "Offline WebView2 payload staged: $($runtimeFiles.Count) files under ./webview2-runtime (WebView2Loader.dll present)."
           $version = (node -p "require('./package.json').version")
           $dest = "PS-Cafe-Setup-$version.exe"
           Copy-Item -Path $exe.FullName -Destination $dest -Force

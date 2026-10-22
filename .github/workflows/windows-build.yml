@@ -209,13 +209,18 @@ jobs:
           # scanning the installer binary. Instead, confirm the offline payload was
           # staged for bundling: the CI downloads and extracts the official WebView2
           # FixedVersion .cab into ./webview2-runtime before the build.
-          $runtimeDir = Resolve-Path -Path './webview2-runtime' -ErrorAction Stop
-          $loaderDll = Join-Path $runtimeDir 'WebView2Loader.dll'
-          if (-not (Test-Path $loaderDll -PathType Leaf)) {
-            throw "WebView2Loader.dll not found in staged runtime directory '$runtimeDir'. The offline WebView2 payload was not staged for FixedRuntime bundling; the installer cannot contain it."
+          if (-not (Test-Path -Path './webview2-runtime' -PathType Container)) {
+            throw "Offline WebView2 runtime directory './webview2-runtime' was not staged before the build. The FixedRuntime payload cannot be bundled into the installer."
           }
-          $runtimeFileCount = (Get-ChildItem -Path $runtimeDir -Recurse -File).Count
-          Write-Host "Offline WebView2 payload staged: $runtimeFileCount files in $runtimeDir (WebView2Loader.dll present)."
+          $runtimeFiles = Get-ChildItem -Path './webview2-runtime' -Recurse -File
+          if ($runtimeFiles.Count -eq 0) {
+            throw "Offline WebView2 runtime directory './webview2-runtime' is empty; no payload files were staged for FixedRuntime bundling."
+          }
+          $loader = $runtimeFiles | Where-Object { $_.Name -eq 'WebView2Loader.dll' } | Select-Object -First 1
+          if (-not $loader) {
+            throw "WebView2Loader.dll not found anywhere under ./webview2-runtime; the WebView2 FixedRuntime payload was not staged correctly."
+          }
+          Write-Host "Offline WebView2 payload staged: $($runtimeFiles.Count) files under ./webview2-runtime (WebView2Loader.dll present)."
           Write-Host "FixedRuntime mode bundles these resources into the NSIS installer. Offline WebView2 payload confirmed."
 
       - name: Rename to deterministic filename (PS-Cafe-Setup-<version>.exe)
