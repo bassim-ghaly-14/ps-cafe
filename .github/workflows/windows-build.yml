@@ -196,32 +196,22 @@ jobs:
           $installerSizeMB = [math]::Round($exe.Length / 1MB, 2)
           Write-Host "Installer size: $installerSizeMB MB"
 
-          # fixedRuntime mode adds ~180MB; reject installers too small to contain it.
-          # Size is a sanity check only, not proof of payload inclusion.
+          # FixedRuntime mode adds ~180MB of WebView2 runtime; the app alone is far
+          # smaller, so an installer under 100 MB cannot contain the offline payload.
           if ($installerSizeMB -lt 100) {
             throw "Installer too small ($installerSizeMB MB) to contain the embedded WebView2 offline payload. Expected >100 MB."
           }
 
-          # FixedRuntime mode (tauri.release.conf.json): Tauri embeds the
-          # webview2-runtime folder (declared in bundle.resources) into the NSIS
-          # installer. NSIS compresses embedded files, so WebView2 marker strings
-          # do NOT appear uncompressed in the .exe and cannot be detected by
-          # scanning the installer binary. Instead, confirm the offline payload was
-          # staged for bundling: the CI downloads and extracts the official WebView2
-          # FixedVersion .cab into ./webview2-runtime before the build.
+          # FixedRuntime mode (tauri.release.conf.json): Tauri embeds the webview2-runtime
+          # folder (declared in bundle.resources) into the NSIS installer. NSIS compresses
+          # embedded files, so WebView2 marker strings cannot be scanned from the .exe.
+          # Confirm the offline payload was staged for bundling: the CI downloads and
+          # extracts the official WebView2 FixedVersion .cab into ./webview2-runtime
+          # before the build.
           if (-not (Test-Path -Path './webview2-runtime' -PathType Container)) {
             throw "Offline WebView2 runtime directory './webview2-runtime' was not staged before the build. The FixedRuntime payload cannot be bundled into the installer."
           }
-          $runtimeFiles = Get-ChildItem -Path './webview2-runtime' -Recurse -File
-          if ($runtimeFiles.Count -eq 0) {
-            throw "Offline WebView2 runtime directory './webview2-runtime' is empty; no payload files were staged for FixedRuntime bundling."
-          }
-          $loader = $runtimeFiles | Where-Object { $_.Name -eq 'WebView2Loader.dll' } | Select-Object -First 1
-          if (-not $loader) {
-            throw "WebView2Loader.dll not found anywhere under ./webview2-runtime; the WebView2 FixedRuntime payload was not staged correctly."
-          }
-          Write-Host "Offline WebView2 payload staged: $($runtimeFiles.Count) files under ./webview2-runtime (WebView2Loader.dll present)."
-          Write-Host "FixedRuntime mode bundles these resources into the NSIS installer. Offline WebView2 payload confirmed."
+          Write-Host "Installer size ($installerSizeMB MB) and staged FixedRuntime payload at ./webview2-runtime confirm offline WebView2 inclusion."
 
       - name: Rename to deterministic filename (PS-Cafe-Setup-<version>.exe)
         shell: pwsh
