@@ -94,16 +94,6 @@ jobs:
           # Clean up the CAB file after extraction
           Remove-Item -Path $cabDest -Force
 
-          # Copy the extracted runtime directory to the NSIS build output
-          # so Tauri's fixedRuntime path "./webview2-runtime" is included in the installer
-          $nsisOutputDir = "src-tauri/target/release/bundle/nsis"
-          if (-not (Test-Path $nsisOutputDir)) {
-            Write-Host "NSIS output directory does not exist yet; it will be created during the Tauri build"
-          } else {
-            Write-Host "Copying webview2-runtime to NSIS output directory..."
-            Copy-Item -Path "$extractDir/*" -Destination "$nsisOutputDir/" -Recurse -Force
-            Write-Host "Copied webview2-runtime to $nsisOutputDir"
-          }
           Write-Host "WebView2 runtime extracted to $extractDir"
 
       - name: Rust checks and tests

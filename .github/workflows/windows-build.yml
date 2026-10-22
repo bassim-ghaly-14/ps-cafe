@@ -191,17 +191,33 @@ jobs:
           "INSTALLER_PATH=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "INSTALLER_NAME=$($exe.Name)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           Write-Host "Found installer: $($exe.FullName) ($($exe.Length) bytes)"
-          # Validate that WebView2 runtime is included in the installer
-          $runtimeDir = Join-Path $dir "webview2-runtime"
-          if (Test-Path $runtimeDir) {
-            $runtimeFiles = Get-ChildItem -Path $runtimeDir -Recurse -File | Measure-Object
-            Write-Host "WebView2 runtime directory found in installer with $($runtimeFiles.Count) files"
-            "$RUNTIME_DIR_EXISTS=true" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          } else {
-            Write-Warning "WebView2 runtime directory NOT found in installer at $runtimeDir"
-            "$RUNTIME_DIR_EXISTS=false" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-            throw "WebView2 runtime directory is missing from the NSIS output! The installed application will not be able to find the WebView2 Runtime."
+          # Validate that WebView2 runtime is included in the installer.
+          # Tauri's fixedRuntime mode embeds runtime files INTO the NSIS installer
+          # executable; it does NOT create a standalone webview2-runtime directory.
+          # Verify via installer size (fixedRuntime adds ~180MB) and binary content.
+          $installerSizeMB = [math]::Round($exe.Length / 1MB, 2)
+          Write-Host "Installer size: $installerSizeMB MB"
+
+          # fixedRuntime mode adds ~180MB; reject installers too small to contain it
+          if ($installerSizeMB -lt 100) {
+            throw "Installer too small ($installerSizeMB MB) to contain the embedded WebView2 runtime. Expected >100 MB."
           }
+
+          # Search the installer binary for WebView2 runtime marker files that
+          # fixedRuntime embeds. Absence of both markers means the payload is missing.
+          $webview2Markers = @('WebView2Loader.dll', 'msedgewebview2.exe')
+          $foundMarker = $false
+          foreach ($marker in $webview2Markers) {
+            if (Select-String -Pattern $marker -Path $exe.FullName -Encoding Byte -SimpleMatch) {
+              $foundMarker = $true
+              break
+            }
+          }
+
+          if (-not $foundMarker) {
+            throw "WebView2 runtime markers not found in installer binary. The offline WebView2 payload may be missing from the installer."
+          }
+          Write-Host "WebView2 runtime markers found in installer binary. Offline WebView2 payload confirmed."
 
       - name: Rename to deterministic filename (PS-Cafe-Setup-<version>.exe)
         shell: pwsh
