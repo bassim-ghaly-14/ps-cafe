@@ -17,12 +17,7 @@
     "active": true,
     "targets": ["dmg", "nsis"],
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png"],
-    "windows": {
-      "webviewInstallMode": {
-        "type": "fixedRuntime",
-        "path": "./webview2-runtime"
-      }
-    }
+    "windows": {}
   },
   "plugins": {"sql": {"preload": ["sqlite:ps-cafe.db"]}}
 }
