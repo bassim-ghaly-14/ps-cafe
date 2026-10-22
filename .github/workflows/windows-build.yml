@@ -93,18 +93,15 @@ jobs:
           Write-Host "Extracted $($files.Count) files to $extractDir"
           # Clean up the CAB file after successful extraction
           Remove-Item -Path $cabDest -Force
-
-          # Copy the extracted runtime directory to the NSIS build output
-          # so Tauri's fixedRuntime path "./webview2-runtime" is included in the installer
-          $nsisOutputDir = "src-tauri/target/release/bundle/nsis"
-          if (-not (Test-Path $nsisOutputDir)) {
-            Write-Host "NSIS output directory does not exist yet; it will be created during the Tauri build"
-          } else {
-            Write-Host "Copying webview2-runtime to NSIS output directory..."
-            Copy-Item -Path "$extractDir/*" -Destination "$nsisOutputDir/" -Recurse -Force
-            Write-Host "Copied webview2-runtime to $nsisOutputDir"
+          # Copy the extracted runtime to the Tauri expected location
+          # Tauri's fixedRuntime mode expects the runtime at the path specified in tauri.conf.json
+          # The path './webview2-runtime' is relative to the project root
+          if (-not (Test-Path ./webview2-runtime)) {
+            Copy-Item -Path "$extractDir" -Destination ./webview2-runtime -Recurse -Force
           }
-          Write-Host "WebView2 runtime extracted to $extractDir"
+          Write-Host "WebView2 runtime staged at ./webview2-runtime for Tauri bundling"
+          # Clean up the now-redundant extract directory
+          Remove-Item -Path $extractDir -Recurse -Force -ErrorAction SilentlyContinue
 
       - name: Rust checks and tests
         # NOTE: clippy reports without `-D warnings` because the LAN module
@@ -167,10 +164,13 @@ jobs:
           $nsisDir = Split-Path -Parent $makensisPath
 
           # Add the NSIS bin directory to the current PowerShell process's PATH.
-          $env:PATH = "$env:PATH;$nsisDir"
-
-          # Record the directory in GitHub Actions' persistent workflow PATH.
-          "$nsisDir" | Out-File -FilePath $env:GITHUB_PATH -Append
+          if ($nsisDir) {
+            $env:PATH = "$env:PATH;$nsisDir"
+            # Record the directory in GitHub Actions' persistent workflow PATH.
+            "$nsisDir" | Out-File -FilePath $env:GITHUB_PATH -Append
+          } else {
+            Write-Warning "NSIS directory could not be determined - PATH will not include NSIS bin directory"
+          }
 
           # Run the version check against the resolved executable path.
           & $makensisPath -VERSION
