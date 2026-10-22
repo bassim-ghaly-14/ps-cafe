@@ -10,23 +10,14 @@
     "beforeBuildCommand": "npm run build:prod"
   },
   "app": {
-    "windows": [{ "title": "PS Cafe", "width": 1100, "height": 750, "minWidth": 900, "minHeight": 600 }],
+    "windows": [{"title": "PS Cafe", "width": 1100, "height": 750, "minWidth": 900, "minHeight": 600}],
     "security": { "csp": null }
   },
   "bundle": {
     "active": true,
     "targets": ["dmg", "nsis"],
     "icon": ["icons/32x32.png", "icons/128x32.png", "icons/128x32@2x.png"],
-    "resources": ["./webview2-runtime"]
-  },
-  "windows": {
-    "nsis": {
-      "displayLanguageSelector": false
-    },
-    "webviewInstallMode": {
-      "type": "fixedRuntime",
-      "path": "./webview2-runtime"
-    }
+    "resources": ["./src-tauri/webview2-runtime"]
   },
   "plugins": { "sql": { "preload": ["sqlite:ps-cafe.db"] } }
 }

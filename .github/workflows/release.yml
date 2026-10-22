@@ -176,7 +176,7 @@ jobs:
           & $makensisPath -VERSION
 
       - name: Build production Windows installer (NSIS, production config only)
-        run: tauri build --config src-tauri/tauri.conf.json --config src-tauri/tauri.release.conf.json
+        run: npx tauri build --config src-tauri/tauri.conf.json --config src-tauri/tauri.release.conf.json
 
       - name: Verify + stage canonical installer
         shell: pwsh
