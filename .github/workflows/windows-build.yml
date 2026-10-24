@@ -94,14 +94,11 @@ jobs:
           # Clean up the CAB file after successful extraction
           Remove-Item -Path $cabDest -Force
           # Copy the extracted runtime to the Tauri expected location
-          # Tauri's fixedRuntime mode expects the runtime at the path specified in tauri.conf.json
-          # The path './webview2-runtime' is relative to the project root
-          if (-not (Test-Path ./webview2-runtime)) {
-            Copy-Item -Path "$extractDir" -Destination ./webview2-runtime -Recurse -Force
-          }
-          Write-Host "WebView2 runtime staged at ./webview2-runtime for Tauri bundling"
-          # Clean up the now-redundant extract directory
-          Remove-Item -Path $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+          # Stage the extracted runtime at the path Tauri's fixedRuntime mode
+          # expects. bundle.resources and webviewInstallMode.path both resolve
+          # relative to the config file (src-tauri/), so the runtime is staged
+          # at src-tauri/webview2-runtime/ for bundling into the NSIS installer.
+          Write-Host "WebView2 runtime staged at src-tauri/webview2-runtime for Tauri bundling"
 
       - name: Rust checks and tests
         # NOTE: clippy reports without `-D warnings` because the LAN module
@@ -206,12 +203,12 @@ jobs:
           # folder (declared in bundle.resources) into the NSIS installer. NSIS compresses
           # embedded files, so WebView2 marker strings cannot be scanned from the .exe.
           # Confirm the offline payload was staged for bundling: the CI downloads and
-          # extracts the official WebView2 FixedVersion .cab into ./webview2-runtime
+          # extracts the official WebView2 FixedVersion .cab into src-tauri/webview2-runtime
           # before the build.
-          if (-not (Test-Path -Path './webview2-runtime' -PathType Container)) {
-            throw "Offline WebView2 runtime directory './webview2-runtime' was not staged before the build. The FixedRuntime payload cannot be bundled into the installer."
+          if (-not (Test-Path -Path 'src-tauri/webview2-runtime' -PathType Container)) {
+            throw "Offline WebView2 runtime directory 'src-tauri/webview2-runtime' was not staged before the build. The FixedRuntime payload cannot be bundled into the installer."
           }
-          Write-Host "Installer size ($installerSizeMB MB) and staged FixedRuntime payload at ./webview2-runtime confirm offline WebView2 inclusion."
+          Write-Host "Installer size ($installerSizeMB MB) and staged FixedRuntime payload at src-tauri/webview2-runtime confirm offline WebView2 inclusion."
 
       - name: Rename to deterministic filename (PS-Cafe-Setup-<version>.exe)
         shell: pwsh
