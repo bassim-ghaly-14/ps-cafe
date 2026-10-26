@@ -91,6 +91,25 @@ jobs:
             throw "WebView2 CAB extraction produced no files in $extractDir"
           }
           Write-Host "Extracted $($files.Count) files to $extractDir"
+
+          # The FixedVersion CAB nests every file under a single versioned
+          # folder (Microsoft.WebView2.FixedVersionRuntime.<version>.x64\).
+          # Flatten it so msedgewebview2.exe sits directly in $extractDir,
+          # matching tauri.release.conf.json webviewInstallMode.path =
+          # "webview2-runtime" (resolved to src-tauri/webview2-runtime/).
+          $subdirs = Get-ChildItem -Path $extractDir -Directory
+          if ($subdirs.Count -ne 1) {
+            throw "Expected exactly one versioned WebView2 runtime subfolder in $extractDir, found $($subdirs.Count). The FixedVersion CAB layout is unexpected; do not hardcode a version-specific path."
+          }
+          $subdir = $subdirs[0]
+          Get-ChildItem -Path $subdir.FullName | Move-Item -Destination $extractDir -Force
+          Remove-Item -Path $subdir.FullName -Recurse -Force
+          # Validate the runtime executable is where Tauri expects it at runtime.
+          if (-not (Test-Path -Path "$extractDir\msedgewebview2.exe" -PathType Leaf)) {
+            throw "msedgewebview2.exe was not found directly in $extractDir after flattening the FixedVersion CAB. The installed app would fail with 'Could not find the WebView2 Runtime'."
+          }
+          Write-Host "Flattened FixedVersion runtime into $extractDir; msedgewebview2.exe present."
+
           # Clean up the CAB file after extraction
           Remove-Item -Path $cabDest -Force
 

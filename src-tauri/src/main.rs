@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod lan;
 
 use lan::address::{base_url, list_candidates, preferred};
