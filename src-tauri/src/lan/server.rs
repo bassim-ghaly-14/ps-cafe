@@ -83,7 +83,10 @@ async fn host_guard(State(st): State<AppState>, req: Request, next: Next) -> Res
         .unwrap_or("")
         .to_lowercase();
     let host_no_port = host.split(':').next().unwrap_or("");
-    let ok = host == st.expected_host_suffix.to_lowercase()
+    let ok = host_no_port == st
+        .expected_host_suffix
+        .trim_end_matches(':')
+        .to_lowercase()
         || host_no_port == "localhost"
         || host_no_port == "127.0.0.1"
         || host_no_port == "::1";
