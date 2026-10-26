@@ -146,7 +146,7 @@ describe("mobile LAN sync diagnostics", () => {
     expect(screen.getByText(/غير مقترن/)).toBeInTheDocument();
   });
 
-  it("live update: mobile reflects a PC data change via polling without reload", async () => {
+  it("live update: mobile re-renders when mocked gateway data changes via polling without reload", async () => {
     vi.useFakeTimers();
     try {
       setLan(true);
