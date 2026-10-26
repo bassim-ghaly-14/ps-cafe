@@ -263,6 +263,8 @@ fn lan_revoke_all(state: tauri::State<LanState>) -> LanStatus {
     state.status()
 }
 
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 fn main() {
     let lan_state = LanState::new();
     tauri::Builder::default()
