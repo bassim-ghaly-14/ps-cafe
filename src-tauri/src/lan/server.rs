@@ -83,10 +83,12 @@ async fn host_guard(State(st): State<AppState>, req: Request, next: Next) -> Res
         .unwrap_or("")
         .to_lowercase();
     let host_no_port = host.split(':').next().unwrap_or("");
-    let ok = host_no_port == st
-        .expected_host_suffix
-        .trim_end_matches(':')
-        .to_lowercase()
+    // Compare the full `Host` (address:port) against the advertised
+    // address:port. Stripping only the incoming port (while `expected_host_suffix`
+    // keeps `:port`, e.g. `192.168.1.64:7741`) made the two sides unable to
+    // match for any non-default port, so legitimate phone requests from the
+    // QR URL were rejected with `BAD_HOST`.
+    let ok = host == st.expected_host_suffix.to_lowercase()
         || host_no_port == "localhost"
         || host_no_port == "127.0.0.1"
         || host_no_port == "::1";
@@ -293,9 +295,10 @@ pub async fn serve(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::body::{to_bytes, Bytes};
+    use axum::body::{Body, to_bytes, Bytes};
     use axum::http::HeaderValue;
     use rusqlite::Connection;
+    use tower::ServiceExt as _;
 
     /// App state with a freshly issued valid pairing token, returned
     /// alongside so tests can exercise authenticated call paths.
@@ -452,5 +455,89 @@ mod tests {
         assert_eq!((get.0)("/missing"), None);
         let cloned = get.clone();
         assert_eq!((cloned.0)("/index.html"), Some(b"<html></html>".to_vec()));
+    }
+
+    /// App state bound to an arbitrary advertised address:port, serving a
+    /// trivial asset getter so the router can be exercised standalone.
+    fn app_with_host(expected_host: &str) -> Router {
+        let path = std::env::temp_dir().join(format!(
+            "ps-cafe-host-guard-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let st = AppState {
+            lan: LanState::new(),
+            db: DbHandle::new(path, None),
+            asset_get: AssetGetter(Arc::new(|path| {
+                (path == "/index.html").then(|| b"<html></html>".to_vec())
+            })),
+            expected_host_suffix: expected_host.into(),
+        };
+        router(st)
+    }
+
+    /// `GET /api/health` with the given `Host` header, dispatched through the
+    /// real router (and therefore the real `host_guard` middleware).
+    async fn health_with_host(app: &Router, host: &str) -> Response {
+        let req = Request::builder()
+            .uri("/api/health")
+            .header("host", host)
+            .body(Body::empty())
+            .expect("build request");
+        app.clone().oneshot(req).await.expect("dispatch request")
+    }
+
+    #[tokio::test]
+    async fn host_guard_accepts_qr_flow_address_and_port() {
+        // The iPhone requests the exact URL encoded in the QR code:
+        // http://192.168.1.64:7741/  ->  Host: 192.168.1.64:7741
+        let app = app_with_host("192.168.1.64:7741");
+        let resp = health_with_host(&app, "192.168.1.64:7741").await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            body_json(resp).await,
+            serde_json::json!({ "ok": true, "service": "ps-cafe-lan", "v": 1 })
+        );
+    }
+
+    #[tokio::test]
+    async fn host_guard_accepts_loopback_fallbacks() {
+        // Desktop self-checks on loopback remain allowed regardless of the
+        // advertised LAN address.
+        let app = app_with_host("192.168.1.64:7741");
+        for host in ["127.0.0.1:7741", "localhost:7741"] {
+            let resp = health_with_host(&app, host).await;
+            assert_eq!(resp.status(), StatusCode::OK, "{host}");
+        }
+    }
+
+    #[tokio::test]
+    async fn host_guard_rejects_port_mismatch() {
+        // Address matches but port does not: address:port must both match.
+        let app = app_with_host("192.168.1.64:7741");
+        let resp = health_with_host(&app, "192.168.1.64:9999").await;
+        assert_eq!(resp.status(), StatusCode::MISDIRECTED_REQUEST);
+        assert_eq!(
+            body_json(resp).await,
+            serde_json::json!({ "ok": false, "error": "BAD_HOST" })
+        );
+    }
+
+    #[tokio::test]
+    async fn host_guard_rejects_unknown_host() {
+        let app = app_with_host("192.168.1.64:7741");
+        for host in ["evil.example.com:7741", "10.0.0.99:7741", "192.168.1.64"] {
+            let resp = health_with_host(&app, host).await;
+            assert_eq!(
+                resp.status(),
+                StatusCode::MISDIRECTED_REQUEST,
+                "{host}"
+            );
+            assert_eq!(
+                body_json(resp).await,
+                serde_json::json!({ "ok": false, "error": "BAD_HOST" }),
+                "{host}"
+            );
+        }
     }
 }
