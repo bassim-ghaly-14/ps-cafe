@@ -168,7 +168,13 @@ export function useCafeData() {
       setDayAgg(cur);
       setDayAggregates(byDay);
       setPerStation(per);
-      setSyncStatus("synchronized");
+      // Only claim synchronized when the required initial data is present.
+      // This prevents the UI from showing "synchronized" with empty/zero data
+      // when the LAN gateway is returning an empty or wrong database state.
+      const hasStations = stList && stList.length > 0;
+      const hasOpenDay = open != null;
+      const dataLoadedOK = hasStations && hasOpenDay;
+      setSyncStatus(dataLoadedOK ? "synchronized" : "failed");
       setLastSyncedAt(Date.now());
       setIsStale(false);
       firstFetch.current = true;
